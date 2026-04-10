@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    volumes:
+      # Isso espelha a pasta data do seu PC com a do container
+      # Se o container baixar um JSON, ele aparece no seu Windows/Linux
+      - .:/app
+    env_file:
+      - .env
+    stdin_open: true
+    tty: true
