@@ -1,0 +1,11 @@
+.git
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+*.csv
+*.xlsx
+*.sqlite
+venv/
+.env

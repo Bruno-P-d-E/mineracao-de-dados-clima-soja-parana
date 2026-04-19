@@ -1,5 +1,5 @@
 # Usamos a versão slim do Debian Bullseye
-FROM python:3.9-slim-bullseye
+FROM python:3.10-slim-bullseye
 
 # Evita arquivos .pyc e permite logs em tempo real
 ENV PYTHONDONTWRITEBYTECODE 1
@@ -31,9 +31,8 @@ WORKDIR /app
 
 # 4. Instalar as dependências do Python
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
 # 5. Copiar o restante do código
 COPY . .
-
-CMD ["python", "test_pipeline.py"]

@@ -13,13 +13,13 @@ from datetime import timedelta
 urllib3.disable_warnings()
 
 # --- CONFIGURAÇÕES ---
-RAW_DIR = "data/raw"
+RAW_DIR = "data/raw/NASA_POWER"
 os.makedirs(RAW_DIR, exist_ok=True)
 
 MAX_PROCESSES = 5 
 DELAY_BASE = 1     
-START_DATE = "20160101"
-END_DATE = "20251231"
+START_DATE = "20170101"
+END_DATE = "20241231"
 COMMUNITY = "AG"
 
 # Formato CSV solicitado
@@ -118,8 +118,7 @@ class NasaPowerExtractor:
         print(f"[!] Stop após 5 falhas consecutivas | Delay base: {DELAY_BASE}s")
         
         try:
-            df_muni = pd.read_csv("municipios.csv")
-            df_muni = df_muni[df_muni["codigo_ibge"].astype(str).str.startswith("41")]
+            df_muni = pd.read_csv("./data/raw/IBGE/municipios_pr.csv")
             df_attr = pd.read_csv("atributos.csv")
             lista_attr = df_attr["Atributo"].dropna().unique().tolist()
         except Exception as e:
@@ -131,7 +130,7 @@ class NasaPowerExtractor:
         for _, muni in df_muni.iterrows():
             for chunk in chunks:
                 tasks.append({
-                    "ibge": muni["codigo_ibge"], "municipio": muni["nome"],
+                    "ibge": muni["cod_ibge"], "municipio": muni["nome_municipio"],
                     "lat": muni["latitude"], "lon": muni["longitude"], "parametros": chunk
                 })
 
