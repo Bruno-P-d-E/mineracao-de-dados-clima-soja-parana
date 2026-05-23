@@ -102,7 +102,8 @@ python src/preprocessing/merge.py
 ### Análise Exploratória
 
 Os notebooks de análise estão em `src/analise_exploratoria/`:
-
+`src\mining\supervised.ipynb`
+`src\mining\unsupervised.ipynb`
 
 ### Dashboard Interativo
 
