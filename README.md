@@ -39,9 +39,7 @@ Pipeline_TCC/
 ##  Instalação
 
 ### Pré-requisitos
-- Python 3.10+
-- pip ou conda
-- PostgreSQL (opcional, para banco de dados)
+- Docker
 
 ### Passos
 
