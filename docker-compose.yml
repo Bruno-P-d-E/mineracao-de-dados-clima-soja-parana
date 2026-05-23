@@ -1,0 +1,14 @@
+services:
+  mineracao_dados:
+    build:
+      context: .                  # O contexto é a raiz (onde o comando foi rodado)
+      dockerfile: Dockerfile      # O Dockerfile também está solto aqui na raiz
+    container_name: mineracao_dados_agroclimaticos
+    stdin_open: true              # Mantém o STDIN aberto mesmo se não houver attach
+    tty: true                     # Aloca um terminal virtual
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./references:/app/references
+      - ./src:/app/src
