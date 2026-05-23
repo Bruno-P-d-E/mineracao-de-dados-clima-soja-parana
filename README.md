@@ -64,12 +64,6 @@ Pipeline_TCC/
    pip install -r requirements.txt
    ```
 
-4. **Configurar variáveis de ambiente**
-   ```bash
-   cp .env.example .env
-   # Editar .env com suas credenciais
-   ```
-
 ##  Uso
 
 ### Pré-processamento de Dados
@@ -102,7 +96,9 @@ python src/preprocessing/merge.py
 ### Análise Exploratória
 
 Os notebooks de análise estão em `src/analise_exploratoria/`:
+
 `src\mining\supervised.ipynb`
+
 `src\mining\unsupervised.ipynb`
 
 ### Dashboard Interativo
