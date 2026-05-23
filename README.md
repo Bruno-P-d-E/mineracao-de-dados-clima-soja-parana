@@ -1,4 +1,4 @@
-# Pipeline TCC - Análise de Soja no Paraná
+# Pipeline - Mineração de Dados de Clima e Soja no Paraná
 
 ##  Descrição
 
