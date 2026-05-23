@@ -1,17 +1,17 @@
 # Pipeline TCC - Análise de Soja no Paraná
 
-## 📋 Descrição
+##  Descrição
 
 Pipeline completo para pré-processamento, limpeza e análise de dados de produção de soja no Paraná, integrando dados de múltiplas fontes:
 - **NASA POWER**: Dados climatológicos e meteorológicos
 - **IBGE (SIDRA)**: Dados de produção agrícola
 - **PAM SIDRA**: Dados de produção agrícola municipal
 
-## 🎯 Objetivo
+##  Objetivo
 
 Desenvolver um modelo preditivo para rendimento de soja baseado em variáveis climáticas e de produção no estado do Paraná.
 
-## 📁 Estrutura do Projeto
+##  Estrutura do Projeto
 
 ```
 Pipeline_TCC/
@@ -36,7 +36,7 @@ Pipeline_TCC/
 └── README.md                  # Este arquivo
 ```
 
-## 🔧 Instalação
+##  Instalação
 
 ### Pré-requisitos
 - Python 3.10+
@@ -70,7 +70,7 @@ Pipeline_TCC/
    # Editar .env com suas credenciais
    ```
 
-## 🚀 Uso
+##  Uso
 
 ### Pré-processamento de Dados
 
@@ -102,29 +102,30 @@ python src/preprocessing/merge.py
 ### Análise Exploratória
 
 Os notebooks de análise estão em `src/analise_exploratoria/`:
-- `EDA.ipynb` - Análise exploratória básica
-- `eda_soja_aprofundada.ipynb` - Análise detalhada
+
 
 ### Dashboard Interativo
 
 ```bash
 streamlit run src/dashboard/dashboard.py
 ```
+![Dashboard](src/dashboard/Dashboard.png)
 
 ### Mineração de Dados e Modelagem
 
-```bash
-python src/mining/mining.ipynb
-```
+Os notebooks de análise estão em `src\mining`:
 
-## 📊 Dados
+`src\mining\supervised.ipynb`
+`src\mining\unsupervised.ipynb`
+
+##  Dados
 
 Os dados são organizados em:
 - `data/raw/` - Dados brutos de APIs
 - `data/interim/` - Dados parcialmente processados
 - `data/processed/` - Dataset final (`dataset_final.csv`)
 
-## 🐳 Docker
+##  Docker
 
 Para executar em container:
 
@@ -132,7 +133,7 @@ Para executar em container:
 docker-compose up -d
 ```
 
-## 📦 Dependências Principais
+##  Dependências Principais
 
 - pandas, numpy - Manipulação de dados
 - scikit-learn - Modelagem e clustering
@@ -141,31 +142,19 @@ docker-compose up -d
 - sqlalchemy, psycopg2 - Conexão com banco de dados
 - requests - Requisições HTTP para APIs
 
-## ⚙️ Configuração
-
-Crie um arquivo `.env` baseado em `.env.example` com as seguintes variáveis:
-
-```
-DB_HOST=seu_host
-DB_PORT=6543
-DB_USER=seu_usuario
-DB_PASS=sua_senha
-DB_NAME=seu_banco
-```
-
-## 📝 Notas
+##  Notas
 
 - Arquivos CSV grandes estão no `.gitignore`
 - Use `docker-compose` para consistência entre ambientes
 - Verifique credenciais do banco antes de executar scripts
 
-## 👤 Autor
+##  Autor
 
 Bruno Proença de Souza
 
-## 📄 Licença
+##  Licença
 
 Copyright (C) 2026 Bruno Proença de Souza
-Licenciado sob GNU AGPL v3 - veja o arquivo LICENSE
+Licenciado sob GNU AGPL v3 - Veja o arquivo LICENSE
 
 

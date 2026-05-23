@@ -307,7 +307,7 @@ with col1:
                       title_font=dict(color='#27ae60'), secondary_y=False, showgrid=True)
     fig1.update_yaxes(title_text="Área Perdida (ha)", tickfont=dict(color='#c0392b'),
                       title_font=dict(color='#c0392b'), secondary_y=True, showgrid=False)
-    st.plotly_chart(fig1, use_container_width=True)
+    st.plotly_chart(fig1, width="stretch")
 
 with col2:
     fig2 = make_subplots(specs=[[{"secondary_y": True}]])
@@ -321,7 +321,7 @@ with col2:
     fig2.update_xaxes(title_text="Ano", type='category', tickfont=dict(color='black'), title_font=dict(color='black'))
     fig2.update_yaxes(title_text="Quilograma", secondary_y=False, tickfont=dict(color='black'), title_font=dict(color='black'))
     fig2.update_yaxes(title_text="% Perda", secondary_y=True, tickfont=dict(color='black'), title_font=dict(color='black'))
-    st.plotly_chart(fig2, use_container_width=True)
+    st.plotly_chart(fig2, width="stretch")
 
 col1, col2 = st.columns(2)
 
@@ -335,7 +335,7 @@ with col1:
                        height=400, font=dict(color='black'), separators=',.')
     fig3.update_xaxes(type='category', tickfont=dict(color='black'), title_font=dict(color='black'))
     fig3.update_yaxes(tickfont=dict(color='black'), title_font=dict(color='black'))
-    st.plotly_chart(fig3, use_container_width=True)
+    st.plotly_chart(fig3, width="stretch")
 
 with col2:
     texto_valor = df_agregado['Valor da produção (Mil Reais)'].apply(lambda x: f"R$ {formatar_numero(x)}")
@@ -348,7 +348,7 @@ with col2:
                        font=dict(color='black'), separators=',.')
     fig4.update_xaxes(type='category', tickfont=dict(color='black'), title_font=dict(color='black'))
     fig4.update_yaxes(tickfont=dict(color='black'), title_font=dict(color='black'))
-    st.plotly_chart(fig4, use_container_width=True)
+    st.plotly_chart(fig4, width="stretch")
 
 # ==========================================
 # MATRIZ DE CORRELAÇÃO
@@ -379,7 +379,7 @@ if len(cols_validas) > 1:
                            font=dict(color='black'), separators=',.')
     fig_corr.update_xaxes(tickfont=dict(color='black'))
     fig_corr.update_yaxes(tickfont=dict(color='black'))
-    st.plotly_chart(fig_corr, use_container_width=True)
+    st.plotly_chart(fig_corr, width="stretch")
 else:
     st.warning("Colunas insuficientes para gerar a matriz de correlação.")
 
@@ -468,7 +468,7 @@ fig_top.update_layout(
 fig_top.update_xaxes(tickfont=dict(color='black'), title_font=dict(color='black'))
 fig_top.update_yaxes(tickfont=dict(color='black'), title_font=dict(color='black'))
 fig_top.add_vline(x=0, line_dash="dash", line_color="#000000")
-st.plotly_chart(fig_top, use_container_width=True)
+st.plotly_chart(fig_top, width="stretch")
 
 st.subheader("🔍 Análise Detalhada – Top 3 Variáveis")
 st.info(f"🔬 Relação entre as três variáveis climáticas de maior impacto e a produtividade - {titulo_ano}")
@@ -501,7 +501,7 @@ for idx, row in top3.iterrows():
             fig_scatter.update_layout(height=400, font=dict(color='black'), separators=',.')
             fig_scatter.update_xaxes(tickfont=dict(color='black'), title_font=dict(color='black'))
             fig_scatter.update_yaxes(tickfont=dict(color='black'), title_font=dict(color='black'))
-            st.plotly_chart(fig_scatter, use_container_width=True)
+            st.plotly_chart(fig_scatter, width="stretch")
         with col2:
             st.metric("Correlação", corr_fmt)
             intensidade = "🔴 Forte" if abs(row['Correlação']) > 0.7 else ("🟡 Moderada" if abs(row['Correlação']) > 0.4 else "🟢 Fraca")
@@ -574,7 +574,7 @@ if vars_heatmap:
             font=dict(color='black'), separators=',.'
         )
         fig_heatmap.add_vline(x=10.5, line_dash="dash", line_color="white", line_width=2)
-        st.plotly_chart(fig_heatmap, use_container_width=True)
+        st.plotly_chart(fig_heatmap, width="stretch")
 
         st.subheader("📊 Correlação Média por Fase da Safra")
         st.info("📋 Correlação média consolidada em cada fase fenológica.")
@@ -621,7 +621,7 @@ with col1:
                         font=dict(color='black'), separators=',.')
     fig_p.update_xaxes(type='linear', tickfont=dict(color='black'), title_font=dict(color='black'))
     fig_p.update_yaxes(tickfont=dict(color='black'), title_font=dict(color='black'))
-    st.plotly_chart(fig_p, use_container_width=True)
+    st.plotly_chart(fig_p, width="stretch")
 
 with col2:
     fig_r = go.Figure()
@@ -637,7 +637,7 @@ with col2:
                         font=dict(color='black'), separators=',.')
     fig_r.update_xaxes(type='linear', tickfont=dict(color='black'), title_font=dict(color='black'))
     fig_r.update_yaxes(tickfont=dict(color='black'), title_font=dict(color='black'))
-    st.plotly_chart(fig_r, use_container_width=True)
+    st.plotly_chart(fig_r, width="stretch")
 
 col3, col4 = st.columns(2)
 
@@ -655,7 +655,7 @@ with col3:
                         font=dict(color='black'), separators=',.')
     fig_a.update_xaxes(type='linear', tickfont=dict(color='black'), title_font=dict(color='black'))
     fig_a.update_yaxes(tickfont=dict(color='black'), title_font=dict(color='black'))
-    st.plotly_chart(fig_a, use_container_width=True)
+    st.plotly_chart(fig_a, width="stretch")
 
 with col4:
     fig_v = go.Figure()
@@ -671,7 +671,7 @@ with col4:
                         font=dict(color='black'), separators=',.')
     fig_v.update_xaxes(type='linear', tickfont=dict(color='black'), title_font=dict(color='black'))
     fig_v.update_yaxes(tickfont=dict(color='black'), title_font=dict(color='black'))
-    st.plotly_chart(fig_v, use_container_width=True)
+    st.plotly_chart(fig_v, width="stretch")
 
 # ==========================================
 # RODAPÉ
