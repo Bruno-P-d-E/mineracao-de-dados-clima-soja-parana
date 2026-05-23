@@ -102,7 +102,7 @@ streamlit run src/dashboard/dashboard.py
 ```
 ![Dashboard](src/dashboard/Dashboard.png)
 
-### Mineração de Dados e Modelagem
+### Mineração de Dados
 
 Os notebooks de análise estão em `src\mining`:
 
