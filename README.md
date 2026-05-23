@@ -95,11 +95,7 @@ python src/preprocessing/merge.py
 
 Os notebooks de análise estão em `src/analise_exploratoria/`:
 
-`src\mining\supervised.ipynb`
-
-`src\mining\unsupervised.ipynb`
-
-### Dashboard Interativo
+#### Dashboard Interativo
 
 ```bash
 streamlit run src/dashboard/dashboard.py
@@ -111,6 +107,7 @@ streamlit run src/dashboard/dashboard.py
 Os notebooks de análise estão em `src\mining`:
 
 `src\mining\supervised.ipynb`
+
 `src\mining\unsupervised.ipynb`
 
 ##  Dados
@@ -134,7 +131,6 @@ docker-compose up -d
 - scikit-learn - Modelagem e clustering
 - streamlit - Dashboard web
 - plotly - Visualizações interativas
-- sqlalchemy, psycopg2 - Conexão com banco de dados
 - requests - Requisições HTTP para APIs
 
 ##  Notas
