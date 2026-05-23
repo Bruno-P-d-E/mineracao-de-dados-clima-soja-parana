@@ -90,7 +90,7 @@ st.markdown("<h3 style='text-align: center; color: #000000;'>Análise Inteligent
 @st.cache_data
 def carregar_dados():
     try:
-        df = pd.read_parquet('dataset_final.parquet')
+        df = pd.read_parquet('./data/processed/dataset_final.parquet')
         df['cod_ibge'] = df['cod_ibge'].astype(str) # read_parquet não aceita o parâmetro dtype direto, a conversão deve ser feita após a leitura.
 
         # Renomeia colunas PAM para manter compatibilidade com o restante do app
