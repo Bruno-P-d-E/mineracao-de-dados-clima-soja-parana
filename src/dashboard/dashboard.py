@@ -91,7 +91,7 @@ st.markdown("<h3 style='text-align: center; color: #000000;'>Análise Inteligent
 def carregar_dados():
     try:
         df = pd.read_parquet('./data/processed/dataset_final.parquet')
-        df['cod_ibge'] = df['cod_ibge'].astype(str) # read_parquet não aceita o parâmetro dtype direto, a conversão deve ser feita após a leitura.
+        df['cod_ibge'] = df['cod_ibge'].astype(str)
 
         # Renomeia colunas PAM para manter compatibilidade com o restante do app
         df = df.rename(columns={
@@ -100,7 +100,7 @@ def carregar_dados():
             'Área plantada ou destinada à colheita - percentual do total geral':
                 'Área plantada - percentual do total geral',
             'Ano': 'ano',
-            'mesorregiao': 'Mesorregião' # Renomeando a coluna exata do seu dataset
+            'mesorregiao': 'Mesorregião'
         })
 
         # Colunas derivadas
@@ -117,8 +117,8 @@ def carregar_dados():
 
         # Chave numérica para o mapa
         df['codigo_ibge'] = df['cod_ibge'].astype(str).str.zfill(7).str[:7].astype(int)
-        
-        # Garante que a coluna Mesorregião exista, se não, cria um placeholder para não quebrar
+
+        # Garante que a coluna Mesorregião exista
         if 'Mesorregião' not in df.columns:
              st.warning("Aviso: Coluna 'mesorregiao' não encontrada no dataset. O filtro de mesorregião não terá efeito.")
              df['Mesorregião'] = "Mesorregião Desconhecida"
@@ -138,42 +138,42 @@ df = carregar_dados()
 colunas_climaticas = [col for col in df.columns if re.match(r'.*_dec\d+_ano\d+', col)]
 atributos_climaticos = list(set([col.rsplit('_dec', 1)[0] for col in colunas_climaticas]))
 
-# Correlações
+# ==========================================
+# FUNÇÃO DE CORRELAÇÃO – com cache_key para
+# invalidar o cache quando os filtros mudam
+# ==========================================
 @st.cache_data
-def calcular_correlacoes_relevantes(_df):
-    variaveis_soja = [
-        'Rendimento médio da produção (Quilogramas por Hectare)',
-        'Quantidade produzida (Toneladas)',
-        'Área perdida (Hectares)',
-        'Percentual de perda (%)'
-    ]
-    resultados = []
-    for var_soja in variaveis_soja:
-        for col_clima in colunas_climaticas:
-            try:
-                df_temp = _df[[col_clima, var_soja]].dropna()
-                if len(df_temp) > 0:
-                    corr = df_temp.corr().iloc[0, 1]
-                    if not np.isnan(corr):
-                        atributo = col_clima.rsplit('_dec', 1)[0]
-                        dec_match = re.search(r'dec(\d+)', col_clima)
-                        ano_match = re.search(r'ano(\d+)', col_clima)
-                        if dec_match and ano_match:
-                            resultados.append({
-                                'Variável Climática': atributo,
-                                'Decêndio': int(dec_match.group(1)),
-                                'Ano Safra': f"ano{ano_match.group(1)}",
-                                'Coluna': col_clima,
-                                'Variável Soja': var_soja,
-                                'Correlação': corr,
-                                'Correlação Abs': abs(corr)
-                            })
-            except:
-                continue
-    return pd.DataFrame(resultados)
+def calcular_correlacoes_por_ano(_df, metrica, ano_filtro, cache_key):
+    """
+    Calcula correlações de Pearson entre variáveis climáticas e uma métrica de soja.
 
-with st.spinner("🔍 Analisando correlações climáticas..."):
-    df_correlacoes_inicial = calcular_correlacoes_relevantes(df)
+    O parâmetro cache_key é uma string derivada dos filtros ativos (municípios,
+    mesorregiões, anos). Como o Streamlit NÃO hasheia argumentos com underscore (_df),
+    a cache_key garante que entradas distintas sejam criadas no cache sempre que
+    os filtros mudarem, evitando resultados desatualizados.
+    """
+    resultados = []
+    for col_clima in colunas_climaticas:
+        try:
+            df_temp = _df[[col_clima, metrica]].dropna()
+            if len(df_temp) > 5:
+                corr = df_temp.corr().iloc[0, 1]
+                if not np.isnan(corr):
+                    atributo = col_clima.rsplit('_dec', 1)[0]
+                    dec_match = re.search(r'dec(\d+)', col_clima)
+                    ano_match = re.search(r'ano(\d+)', col_clima)
+                    if dec_match and ano_match:
+                        resultados.append({
+                            'Variável Climática': atributo,
+                            'Decêndio': int(dec_match.group(1)),
+                            'Ano Safra': f"ano{ano_match.group(1)}",
+                            'Coluna': col_clima,
+                            'Correlação': corr,
+                            'Correlação Abs': abs(corr)
+                        })
+        except:
+            continue
+    return pd.DataFrame(resultados)
 
 # ==========================================
 # SIDEBAR – Filtros
@@ -233,6 +233,26 @@ df_agregado = df_filtrado.groupby('ano').agg({
     'Valor da produção (Mil Reais)': 'sum',
     'Rendimento médio da produção (Quilogramas por Hectare)': 'mean'
 }).reset_index()
+
+# ==========================================
+# CACHE KEY – derivada dos filtros ativos
+# Usada em todas as chamadas de correlação
+# para garantir invalidação correta do cache
+# ==========================================
+cache_key_filtros = (
+    f"mun={','.join(sorted(municipios_selecionados))}"
+    f"|meso={','.join(sorted(mesorregioes_selecionadas))}"
+    f"|anos={','.join(str(a) for a in sorted(anos_selecionados))}"
+)
+
+# Correlações iniciais (spinner) – já refletem os filtros ativos
+with st.spinner("🔍 Analisando correlações climáticas..."):
+    df_correlacoes_inicial = calcular_correlacoes_por_ano(
+        df_filtrado,
+        'Rendimento médio da produção (Quilogramas por Hectare)',
+        'Todos',
+        cache_key_filtros
+    )
 
 # ==========================================
 # MÉTRICAS PRINCIPAIS
@@ -414,32 +434,19 @@ else:
     df_para_correlacao = df_filtrado[df_filtrado['ano'] == int(ano_clima_analise)].copy()
     titulo_ano = ano_clima_analise
 
-@st.cache_data
-def calcular_correlacoes_por_ano(_df, metrica, ano_filtro):
-    resultados = []
-    for col_clima in colunas_climaticas:
-        try:
-            df_temp = _df[[col_clima, metrica]].dropna()
-            if len(df_temp) > 5:
-                corr = df_temp.corr().iloc[0, 1]
-                if not np.isnan(corr):
-                    atributo = col_clima.rsplit('_dec', 1)[0]
-                    dec_match = re.search(r'dec(\d+)', col_clima)
-                    ano_match = re.search(r'ano(\d+)', col_clima)
-                    if dec_match and ano_match:
-                        resultados.append({
-                            'Variável Climática': atributo,
-                            'Decêndio': int(dec_match.group(1)),
-                            'Ano Safra': f"ano{ano_match.group(1)}",
-                            'Coluna': col_clima,
-                            'Correlação': corr,
-                            'Correlação Abs': abs(corr)
-                        })
-        except:
-            continue
-    return pd.DataFrame(resultados)
+# Cache key específica para esta seção (inclui métrica e ano selecionados)
+cache_key_clima = (
+    f"{cache_key_filtros}"
+    f"|metrica={metrica_foco}"
+    f"|ano_analise={ano_clima_analise}"
+)
 
-df_corr_foco = calcular_correlacoes_por_ano(df_para_correlacao, metrica_foco, ano_clima_analise)
+df_corr_foco = calcular_correlacoes_por_ano(
+    df_para_correlacao,
+    metrica_foco,
+    ano_clima_analise,
+    cache_key_clima
+)
 
 if len(df_corr_foco) == 0:
     st.warning("⚠️ Não há dados suficientes para calcular correlações com os filtros selecionados.")

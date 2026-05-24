@@ -125,19 +125,11 @@ Para executar em container:
 docker-compose up -d
 ```
 
-##  Dependências Principais
-
-- pandas, numpy - Manipulação de dados
-- scikit-learn - Modelagem e clustering
-- streamlit - Dashboard web
-- plotly - Visualizações interativas
-- requests - Requisições HTTP para APIs
 
 ##  Notas
 
 - Arquivos CSV grandes estão no `.gitignore`
 - Use `docker-compose` para consistência entre ambientes
-- Verifique credenciais do banco antes de executar scripts
 
 ##  Autor
 
