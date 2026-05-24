@@ -170,16 +170,18 @@ def carregar_descricoes_atributos():
     Carrega o CSV com as descrições dos atributos climáticos.
     Retorna dict {atributo: descrição} ou vazio se não encontrado.
     """
-    for caminho in ['./data/Atributos.csv', './Atributos.csv', './data/raw/Atributos.csv', './data/Atributo.csv', './Atributo.csv']:
-        try:
-            df_desc = pd.read_csv(caminho)
-            if 'Atributo' in df_desc.columns and 'Descrição' in df_desc.columns:
-                return dict(zip(df_desc['Atributo'].str.strip(),
-                                df_desc['Descrição'].str.strip()))
-        except FileNotFoundError:
-            continue
-        except Exception:
-            continue
+
+    try:
+        df_desc = pd.read_csv('.\src\dashboard\Atributos.csv')
+        if 'Atributo' in df_desc.columns and 'Descrição' in df_desc.columns:
+            return dict(zip(df_desc['Atributo'].str.strip(),
+                            df_desc['Descrição'].str.strip()))
+    except FileNotFoundError:
+        st.error("⚠️ Arquivo 'Atributos.csv' não encontrado!")
+        st.stop()
+    except Exception as e:
+        st.error(f"❌ Erro ao carregar descrições: {e}")
+        st.stop()
     return {}
 
 
@@ -187,24 +189,40 @@ df             = carregar_dados()
 desc_atributos = carregar_descricoes_atributos()
 
 
+def _base_atributo(atributo: str) -> str:
+    """Remove o sufixo _dec{N}_ano{N} e retorna o código base."""
+    return re.sub(r'_dec.*$', '', atributo.strip())
+
+
 def desc_clima(atributo: str) -> str:
     """
-    Retorna a descrição legível de um atributo climático.
-
-    Remove automaticamente o sufixo _dec{N}_ano{N} antes do lookup,
-    então funciona tanto com 'AIRMASS' quanto com 'AIRMASS_dec1_ano1'.
-    Fallback: o prefixo base do atributo, caso não esteja no CSV.
+    Descrição legível de um atributo climático.
+    Aceita tanto 'AIRMASS' quanto 'AIRMASS_dec1_ano1'.
+    Retorna a descrição do CSV, ou apenas o código base se não encontrado.
     """
-    base = re.sub(r'_dec\d+_ano\d+$', '', atributo.strip())
+    base = _base_atributo(atributo)
     return desc_atributos.get(base, base)
+
+
+def label_atributo(atributo: str) -> str:
+    """
+    Formato canônico para exibição ao usuário: 'Descrição (CÓDIGO)'.
+    Se o atributo não estiver no CSV, exibe apenas o código, sem repetição.
+
+    Exemplos:
+      AIRMASS  →  'Massa de ar (AIRMASS)'
+      RHOA     →  'RHOA'            ← sem descrição no CSV; não repete
+    """
+    base = _base_atributo(atributo)
+    desc = desc_atributos.get(base)          # None se não encontrado
+    return f"{desc} ({base})" if desc else base
 
 
 def label_clima_grafico(atributo: str, decendio: int, ano_safra: str) -> str:
     """
-    Label para eixos Plotly: 'Descrição  ·  dec{N} {ano_safra}'.
-    O separador '·' mantém a leitura rápida no eixo Y horizontal.
+    Label para eixos Plotly: 'Descrição (CÓDIGO)  ·  dec{N} {ano_safra}'.
     """
-    return f"{desc_clima(atributo)}  ·  dec{decendio} {ano_safra}"
+    return f"{label_atributo(atributo)}  ·  dec{decendio} {ano_safra}"
 
 
 # Identifica colunas climáticas
@@ -694,6 +712,8 @@ if len(df_corr_foco) == 0:
 
 df_corr_foco = df_corr_foco.nlargest(min(top_n, len(df_corr_foco)), 'Correlação Abs')
 
+
+
 st.subheader(f"🔝 Top {len(df_corr_foco)} Variáveis com Maior Impacto – {titulo_ano}")
 
 texto_corr = df_corr_foco['Correlação'].apply(lambda x: f"{x:.3f}".replace('.', ','))
@@ -718,6 +738,22 @@ fig_top.update_yaxes(tickfont=dict(color='black'), title_font=dict(color='black'
 fig_top.add_vline(x=0, line_dash="dash", line_color="#000000")
 st.plotly_chart(fig_top, use_container_width=True)
 
+# ── Tabela de legenda sempre visível ─────────────────────────────────────────
+if desc_atributos:
+    atribs_no_top = df_corr_foco['Variável Climática'].unique()
+    linhas_legenda = [
+        {'Código': a, 'Descrição': label_atributo(a)}
+        for a in sorted(atribs_no_top)
+    ]
+    if linhas_legenda:
+        df_legenda = pd.DataFrame(linhas_legenda).set_index('Código')
+        st.markdown("#### 📖 Legenda das Variáveis Climáticas")
+        st.dataframe(
+            df_legenda,
+            use_container_width=True,
+            height=min(38 + len(df_legenda) * 35, 320),   # máx ~8 linhas visíveis
+        )
+
 # ── Análise detalhada – Top 3 ─────────────────────────────────────────────────
 st.subheader("🔍 Análise Detalhada – Top 3 Variáveis")
 st.info(f"🔬 Relação entre as três variáveis climáticas de maior impacto e a produtividade – {titulo_ano}")
@@ -729,9 +765,8 @@ for idx, row in top3.iterrows():
     corr_fmt = str(round(row['Correlação'], 4)).replace('.', ',')
 
     with st.expander(
-        f"**{idx + 1}. {desc_clima(row['Variável Climática'])} "
-        f"({row['Variável Climática']})  ·  dec{row['Decêndio']} {row['Ano Safra']}  "
-        f"|  r = {corr_fmt}**"
+        f"**{idx + 1}. {label_atributo(row['Variável Climática'])}"
+        f"  ·  dec{row['Decêndio']} {row['Ano Safra']}  |  r = {corr_fmt}**"
     ):
         col1, col2 = st.columns([2, 1])
         with col1:
@@ -740,7 +775,7 @@ for idx, row in top3.iterrows():
             ].dropna()
             titulo_scatter = (
                 f"Dispersão ({metrica_foco.split('(')[0].strip()}) "
-                f"× {desc_clima(row['Variável Climática'])} ({row['Variável Climática']})"
+                f"× {label_atributo(row['Variável Climática'])}"
             )
             try:
                 fig_scatter = px.scatter(
@@ -770,7 +805,7 @@ for idx, row in top3.iterrows():
             fig_scatter.update_yaxes(tickfont=dict(color='black'), title_font=dict(color='black'))
             st.plotly_chart(fig_scatter, use_container_width=True)
         with col2:
-            st.info(f"📖 **{desc_clima(row['Variável Climática'])}** (`{row['Variável Climática']}`)")
+            st.info(f"📖 {label_atributo(row['Variável Climática'])}")
             st.metric("Correlação", corr_fmt)
             intensidade = (
                 "🔴 Forte"    if abs(row['Correlação']) > 0.7 else
@@ -781,7 +816,7 @@ for idx, row in top3.iterrows():
             st.metric("Direção", "📈 Positiva" if row['Correlação'] > 0 else "📉 Negativa")
             st.markdown("**Interpretação:**")
             metrica_curta = metrica_foco.split('(')[0].strip()
-            atrib_legivel = desc_clima(row['Variável Climática'])
+            atrib_legivel = label_atributo(row['Variável Climática'])
             if row['Correlação'] > 0:
                 st.success(
                     f"Aumento de **{atrib_legivel}** "
@@ -805,6 +840,7 @@ vars_heatmap = st.multiselect(
     "Selecione variáveis climáticas para o mapa de calor:",
     options=variaveis_disponiveis,
     default=variaveis_disponiveis[:min(5, len(variaveis_disponiveis))],
+    format_func=desc_clima,   # exibe descrição legível; valor interno continua sendo o código
 )
 
 if vars_heatmap:
