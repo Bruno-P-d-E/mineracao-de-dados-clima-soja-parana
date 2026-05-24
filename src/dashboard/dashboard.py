@@ -257,44 +257,139 @@ with st.spinner("🔍 Analisando correlações climáticas..."):
 # ==========================================
 # MÉTRICAS PRINCIPAIS
 # ==========================================
-st.header("📊 Indicadores Principais – Paraná (Último Ano)")
-st.info("📋 Resumo dos principais indicadores de produção e rendimento de soja no último ano agrícola.")
+
+# Título e descrição do cabeçalho adaptados dinamicamente ao período selecionado
+if len(anos_selecionados) == 0:
+    titulo_metricas  = "📊 Indicadores Principais – Nenhum Ano Selecionado"
+    descricao_metricas = "⚠️ Selecione ao menos um ano no filtro lateral para visualizar os indicadores."
+elif len(anos_selecionados) == 1:
+    ano_unico = anos_selecionados[0]
+    titulo_metricas    = f"📊 Indicadores Principais – {ano_unico}"
+    descricao_metricas = f"📋 Indicadores de produção e rendimento de soja para o ano de {ano_unico}."
+else:
+    ano_ini = min(anos_selecionados)
+    ano_fim = max(anos_selecionados)
+    # Verifica se os anos selecionados formam um intervalo contínuo
+    intervalo_continuo = sorted(anos_selecionados) == list(range(ano_ini, ano_fim + 1))
+    periodo_label = f"{ano_ini}–{ano_fim}" if intervalo_continuo else ", ".join(str(a) for a in sorted(anos_selecionados))
+    titulo_metricas    = f"📊 Indicadores Principais – {periodo_label} (consolidado)"
+    descricao_metricas = (
+        f"📋 Valores consolidados para o período {periodo_label}. "
+        f"O delta (▲▼) compara o **último ano ({ano_fim})** com o **penúltimo ano disponível** na seleção."
+    )
+
+st.header(titulo_metricas)
+st.info(descricao_metricas)
 
 if len(df_agregado) > 0:
-    ultimo_ano   = df_agregado.iloc[-1]
-    penultimo_ano = df_agregado.iloc[-2] if len(df_agregado) > 1 else ultimo_ano
+    # ── Valores de referência ────────────────────────────────────────────────
+    # "Atual": último ano presente em df_agregado (sempre disponível)
+    # "Anterior": penúltimo ano – usado apenas para o delta; se não existir,
+    #             o delta é omitido (delta_str = None → st.metric sem delta)
 
+    ultimo_ano    = df_agregado.iloc[-1]
+    tem_anterior  = len(df_agregado) > 1
+    penultimo_ano = df_agregado.iloc[-2] if tem_anterior else None
+
+    # ── Valores consolidados (soma/média de todos os anos selecionados) ──────
+    soma_area_plantada  = df_agregado['Área plantada (Hectares)'].sum()
+    soma_area_perdida   = df_agregado['Área perdida (Hectares)'].sum()
+    soma_producao       = df_agregado['Quantidade produzida (Toneladas)'].sum()
+    media_rendimento    = df_agregado['Rendimento médio da produção (Quilogramas por Hectare)'].mean()
+    media_perda_pct     = df_agregado['Percentual de perda (%)'].mean()
+
+    # ── Função utilitária: delta percentual entre dois valores ───────────────
+    def delta_pct(atual, anterior):
+        """Retorna variação % formatada, ou None se não houver referência."""
+        if anterior is None or anterior == 0:
+            return None
+        v = (atual - anterior) / anterior * 100
+        return formatar_numero(v, sufixo='%', decimais=2, prefixo='+ ' if v > 0 else '')
+
+    def delta_pp(atual, anterior):
+        """Retorna variação em pontos percentuais formatada, ou None."""
+        if anterior is None:
+            return None
+        d = atual - anterior
+        return formatar_numero(d, sufixo=' pp', decimais=2, prefixo='+ ' if d > 0 else '')
+
+    # ── Escolha de valor exibido e delta conforme o modo ────────────────────
+    if len(anos_selecionados) == 1:
+        # Ano único: exibe o valor daquele ano; sem delta (não há comparação)
+        val_area_plantada = ultimo_ano['Área plantada (Hectares)']
+        val_area_perdida  = ultimo_ano['Área perdida (Hectares)']
+        val_producao      = ultimo_ano['Quantidade produzida (Toneladas)']
+        val_rendimento    = ultimo_ano['Rendimento médio da produção (Quilogramas por Hectare)']
+        val_perda_pct     = ultimo_ano['Percentual de perda (%)']
+        d_area_plantada   = None
+        d_area_perdida    = None
+        d_producao        = None
+        d_rendimento      = None
+        d_perda_pct       = None
+    else:
+        # Múltiplos anos: exibe consolidado; delta = último vs. penúltimo ano
+        val_area_plantada = soma_area_plantada
+        val_area_perdida  = soma_area_perdida
+        val_producao      = soma_producao
+        val_rendimento    = media_rendimento
+        val_perda_pct     = media_perda_pct
+        ant = penultimo_ano  # pode ser None se df_agregado tiver 1 linha (raro)
+        d_area_plantada = delta_pct(
+            ultimo_ano['Área plantada (Hectares)'],
+            ant['Área plantada (Hectares)'] if ant is not None else None
+        )
+        d_area_perdida = delta_pct(
+            ultimo_ano['Área perdida (Hectares)'],
+            ant['Área perdida (Hectares)'] if ant is not None else None
+        )
+        d_producao = delta_pct(
+            ultimo_ano['Quantidade produzida (Toneladas)'],
+            ant['Quantidade produzida (Toneladas)'] if ant is not None else None
+        )
+        d_rendimento = delta_pct(
+            ultimo_ano['Rendimento médio da produção (Quilogramas por Hectare)'],
+            ant['Rendimento médio da produção (Quilogramas por Hectare)'] if ant is not None else None
+        )
+        d_perda_pct = delta_pp(
+            ultimo_ano['Percentual de perda (%)'],
+            ant['Percentual de perda (%)'] if ant is not None else None
+        )
+
+    # ── Renderização ─────────────────────────────────────────────────────────
     col1, col2, col3, col4, col5 = st.columns(5)
 
     with col1:
-        v = ((ultimo_ano['Área plantada (Hectares)'] - penultimo_ano['Área plantada (Hectares)']) /
-             penultimo_ano['Área plantada (Hectares)'] * 100) if penultimo_ano['Área plantada (Hectares)'] > 0 else 0
-        st.metric("Área Plantada", formatar_numero(ultimo_ano['Área plantada (Hectares)'], sufixo=' ha'),
-                  formatar_numero(v, sufixo='%', decimais=2, prefixo='+ ' if v > 0 else ''))
-
+        st.metric(
+            "Área Plantada",
+            formatar_numero(val_area_plantada, sufixo=' ha'),
+            d_area_plantada
+        )
     with col2:
-        v = ((ultimo_ano['Área perdida (Hectares)'] - penultimo_ano['Área perdida (Hectares)']) /
-             penultimo_ano['Área perdida (Hectares)'] * 100) if penultimo_ano['Área perdida (Hectares)'] > 0 else 0
-        st.metric("Área Perdida", formatar_numero(ultimo_ano['Área perdida (Hectares)'], sufixo=' ha'),
-                  formatar_numero(v, sufixo='%', decimais=2, prefixo='+ ' if v > 0 else ''), delta_color="inverse")
-
+        st.metric(
+            "Área Perdida",
+            formatar_numero(val_area_perdida, sufixo=' ha'),
+            d_area_perdida,
+            delta_color="inverse"
+        )
     with col3:
-        v = ((ultimo_ano['Quantidade produzida (Toneladas)'] - penultimo_ano['Quantidade produzida (Toneladas)']) /
-             penultimo_ano['Quantidade produzida (Toneladas)'] * 100) if penultimo_ano['Quantidade produzida (Toneladas)'] > 0 else 0
-        st.metric("Produção", formatar_numero(ultimo_ano['Quantidade produzida (Toneladas)'], sufixo=' Kg'),
-                  formatar_numero(v, sufixo='%', decimais=2, prefixo='+ ' if v > 0 else ''))
-
+        st.metric(
+            "Produção",
+            formatar_numero(val_producao, sufixo=' Kg'),
+            d_producao
+        )
     with col4:
-        v = ((ultimo_ano['Rendimento médio da produção (Quilogramas por Hectare)'] -
-              penultimo_ano['Rendimento médio da produção (Quilogramas por Hectare)']) /
-             penultimo_ano['Rendimento médio da produção (Quilogramas por Hectare)'] * 100) if penultimo_ano['Rendimento médio da produção (Quilogramas por Hectare)'] > 0 else 0
-        st.metric("Rendimento", formatar_numero(ultimo_ano['Rendimento médio da produção (Quilogramas por Hectare)'], sufixo=' kg/ha'),
-                  formatar_numero(v, sufixo='%', decimais=2, prefixo='+ ' if v > 0 else ''))
-
+        st.metric(
+            "Rendimento Médio",
+            formatar_numero(val_rendimento, sufixo=' kg/ha'),
+            d_rendimento
+        )
     with col5:
-        diff = ultimo_ano['Percentual de perda (%)'] - penultimo_ano['Percentual de perda (%)']
-        st.metric("% de Perda", formatar_numero(ultimo_ano['Percentual de perda (%)'], sufixo='%', decimais=2),
-                  formatar_numero(diff, sufixo=' pp', decimais=2, prefixo='+ ' if diff > 0 else ''), delta_color="inverse")
+        st.metric(
+            "% de Perda",
+            formatar_numero(val_perda_pct, sufixo='%', decimais=2),
+            d_perda_pct,
+            delta_color="inverse"
+        )
 
 # ==========================================
 # GRÁFICOS PRINCIPAIS
