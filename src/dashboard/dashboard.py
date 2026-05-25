@@ -416,20 +416,21 @@ if len(df_agregado) > 0:
     ultimo_ano   = df_agregado.iloc[-1]
     tem_dois     = len(df_agregado) > 1
 
-    def delta_pct_fmt(val_atual, val_ref, sufixo_abs=' ha'):
+    def delta_pct_fmt(val_atual, val_ref, sufixo_abs=' ha', sempre_pct=False):
         """
         Variação percentual formatada (pt-BR), ou None quando não há referência.
 
         Casos especiais de base zero:
         - ref == 0 e atual == 0  → '= 0' (sem mudança)
-        - ref == 0 e atual != 0  → variação absoluta (% indefinida)
-          Ex.: '+ 1.234 ha'  — usa sufixo_abs para indicar a unidade original.
+        - ref == 0 e atual != 0  → variação absoluta (% indefinida) ou '∞ %' se sempre_pct=True
         """
         if val_ref is None or not tem_dois or pd.isna(val_ref) or pd.isna(val_atual):
             return None
         if val_ref == 0:
             if val_atual == 0:
                 return "= 0"
+            if sempre_pct:
+                return "∞ %"
             # Base zero: % indefinida → mostra variação absoluta com unidade
             diff  = val_atual - val_ref
             sinal = '+ ' if diff > 0 else ''
@@ -464,7 +465,7 @@ if len(df_agregado) > 0:
         val_perda     = perda_pct_consolidada
 
         d_area_p    = delta_pct_fmt(ultimo_ano[COL_AREA_P],    primeiro_ano[COL_AREA_P],    sufixo_abs=' ha')
-        d_area_perd = delta_pct_fmt(ultimo_ano[COL_AREA_PERD], primeiro_ano[COL_AREA_PERD], sufixo_abs=' ha')
+        d_area_perd = delta_pct_fmt(ultimo_ano[COL_AREA_PERD], primeiro_ano[COL_AREA_PERD], sufixo_abs=' ha', sempre_pct=True)
         d_prod      = delta_pct_fmt(ultimo_ano[COL_PRODUCAO],  primeiro_ano[COL_PRODUCAO],  sufixo_abs=' kg')
         d_rend      = delta_pct_fmt(ultimo_ano[COL_REND],      primeiro_ano[COL_REND],      sufixo_abs=' kg/ha')
         d_perda     = delta_pp_fmt( ultimo_ano[COL_PERDA_PCT],  primeiro_ano[COL_PERDA_PCT])
