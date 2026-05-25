@@ -9,6 +9,7 @@ from plotly.subplots import make_subplots
 import numpy as np
 import re
 from scipy import stats
+from pathlib import Path
 
 # ==========================================
 # NOMES CANÔNICOS DAS COLUNAS
@@ -172,7 +173,8 @@ def carregar_descricoes_atributos():
     """
 
     try:
-        df_desc = pd.read_csv('.\src\dashboard\Atributos.csv')
+        caminho_atributos = Path(__file__).parent / "Atributos.csv"
+        df_desc = pd.read_csv(caminho_atributos)
         if 'Atributo' in df_desc.columns and 'Descrição' in df_desc.columns:
             return dict(zip(df_desc['Atributo'].str.strip(),
                             df_desc['Descrição'].str.strip()))
