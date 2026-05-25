@@ -45,8 +45,8 @@ Pipeline_TCC/
 
 1. **Clonar o repositório**
    ```bash
-   git clone https://github.com/seu-usuario/Pipeline_TCC.git
-   cd Pipeline_TCC
+   git clone https://github.com/Bruno-P-d-E/mineracao-de-dados-clima-soja-parana.git
+   cd mineracao-de-dados-clima-soja-parana
    ```
 
 2. **Criar ambiente virtual**
