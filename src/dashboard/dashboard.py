@@ -215,7 +215,7 @@ def label_atributo(atributo: str) -> str:
     """
     base = _base_atributo(atributo)
     desc = desc_atributos.get(base)          # None se não encontrado
-    return f"{desc} ({base})" if desc else base
+    return f"{base} = {desc}" if desc else base
 
 
 def label_clima_grafico(atributo: str, decendio: int, ano_safra: str) -> str:
@@ -720,8 +720,8 @@ texto_corr = df_corr_foco['Correlação'].apply(lambda x: f"{x:.3f}".replace('.'
 fig_top = go.Figure()
 fig_top.add_trace(go.Bar(
     x=df_corr_foco['Correlação'],
-    y=[label_clima_grafico(r['Variável Climática'], r['Decêndio'], r['Ano Safra'])
-       for _, r in df_corr_foco.iterrows()],
+    y=[f"{row['Variável Climática']}_dec{row['Decêndio']}_{row['Ano Safra']}"
+       for _, row in df_corr_foco.iterrows()],
     orientation='h',
     marker_color=df_corr_foco['Correlação'],
     marker_colorscale='RdYlGn', marker_cmin=-1, marker_cmax=1,
@@ -738,21 +738,34 @@ fig_top.update_yaxes(tickfont=dict(color='black'), title_font=dict(color='black'
 fig_top.add_vline(x=0, line_dash="dash", line_color="#000000")
 st.plotly_chart(fig_top, use_container_width=True)
 
-# ── Tabela de legenda sempre visível ─────────────────────────────────────────
+# ── legenda ─────────────────────────────────────────
 if desc_atributos:
-    atribs_no_top = df_corr_foco['Variável Climática'].unique()
-    linhas_legenda = [
-        {'Código': a, 'Descrição': label_atributo(a)}
-        for a in sorted(atribs_no_top)
-    ]
-    if linhas_legenda:
-        df_legenda = pd.DataFrame(linhas_legenda).set_index('Código')
-        st.markdown("#### 📖 Legenda das Variáveis Climáticas")
-        st.dataframe(
-            df_legenda,
-            use_container_width=True,
-            height=min(38 + len(df_legenda) * 35, 320),   # máx ~8 linhas visíveis
-        )
+
+    atribs_no_top = sorted(
+        set(df_corr_foco['Variável Climática'].unique())
+    )
+
+    legenda_atribs = "; ".join([
+        f"{label_atributo(a)}"
+        for a in atribs_no_top
+    ])
+
+    st.markdown(
+        f"""
+        <div style="
+            font-size: 0.92rem;
+            line-height: 1.55;
+            color: #000000;
+            text-align: justify;
+            font-family: 'Times New Roman', serif;
+            padding-top: 0.20rem;
+            padding-bottom: 0.15rem;
+        ">
+            <b>Em que:</b> {legenda_atribs}
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
 # ── Análise detalhada – Top 3 ─────────────────────────────────────────────────
 st.subheader("🔍 Análise Detalhada – Top 3 Variáveis")
@@ -893,7 +906,9 @@ if vars_heatmap:
         )
         pivot_heatmap = pivot_heatmap[[c for c in colunas_ordenadas if c in pivot_heatmap.columns]]
         # Substitui o índice (código) pela descrição legível do CSV
-        pivot_heatmap.index = [desc_clima(v) for v in pivot_heatmap.index]
+        pivot_heatmap.index = [
+    _base_atributo(v) for v in pivot_heatmap.index
+]
         text_heatmap  = pivot_heatmap.map(lambda x: f"{x:.2f}".replace('.', ','))
 
         fig_heatmap = go.Figure(data=go.Heatmap(
@@ -918,6 +933,34 @@ if vars_heatmap:
         )
         fig_heatmap.add_vline(x=10.5, line_dash="dash", line_color="white", line_width=2)
         st.plotly_chart(fig_heatmap, use_container_width=True)
+
+        # ── Legenda científica compacta ─────────────────────────────
+        variaveis_legenda = sorted(set(
+            _base_atributo(v)
+            for v in vars_heatmap
+        ))
+
+        legenda_txt = "; ".join([
+            f"{v} = {desc_clima(v)}"
+            for v in variaveis_legenda
+        ])
+
+        st.markdown(
+            f"""
+            <div style="
+                font-size: 0.92rem;
+                line-height: 1.55;
+                color: #000000;
+                text-align: justify;
+                font-family: 'Times New Roman', serif;
+                padding-top: 0.35rem;
+                padding-bottom: 0.15rem;
+            ">
+                <b>Em que: </b> {legenda_txt}
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
         st.subheader("📊 Correlação Média por Fase da Safra")
         st.info("📋 Correlação média consolidada em cada fase fenológica (calculada sobre os valores do mapa).")
