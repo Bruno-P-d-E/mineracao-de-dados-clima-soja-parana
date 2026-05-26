@@ -1,0 +1,115 @@
+﻿Atributo,Descrição
+AIRMASS,Massa de Ar
+ALLSKY_KT,Índice de Claridade da Insolação para Todas as Condições de Céu
+ALLSKY_NKT,Índice de Claridade da Insolação Normalizado para Todas as Condições de Céu
+ALLSKY_SFC_LW_DWN,Irradiância de Onda Longa Descendente à Superfície para Todas as Condições de Céu
+ALLSKY_SFC_LW_UP,Irradiância de Onda Longa Ascendente à Superfície para Todas as Condições de Céu
+ALLSKY_SFC_PAR_DIFF,RFA Difusa à Superfície para Todas as Condições de Céu
+ALLSKY_SFC_PAR_DIRH,RFA Direta Horizontal à Superfície para Todas as Condições de Céu
+ALLSKY_SFC_PAR_TOT,RFA Total à Superfície para Todas as Condições de Céu
+ALLSKY_SFC_SW_DIFF,Irradiância de Onda Curta Difusa à Superfície para Todas as Condições de Céu
+ALLSKY_SFC_SW_DIRH,Irradiância de Onda Curta Direta Horizontal à Superfície para Todas as Condições de Céu
+ALLSKY_SFC_SW_DNI,Irradiância Direta Normal de Ondas Curtas Descendente na Superfície sob Todas as Condições de Céu
+ALLSKY_SFC_SW_DWN,Irradiância de Ondas Curtas Descendente na Superfície sob Todas as Condições de Céu
+ALLSKY_SFC_SW_UP,Irradiância de Ondas Curtas Ascendente na Superfície sob Todas as Condições de Céu
+ALLSKY_SFC_UVA,Irradiância UVA na Superfície sob Todas as Condições de Céu
+ALLSKY_SFC_UVB,Irradiância UVB na Superfície sob Todas as Condições de Céu
+ALLSKY_SFC_UV_INDEX,Índice UV na Superfície sob Todas as Condições de Céu
+ALLSKY_SRF_ALB,Albedo da Superfície sob Todas as Condições de Céu
+AOD_55,Espessura Óptica do Aerossol 55
+AOD_55_ADJ,Espessura Óptica do Aerossol Ajustada 55
+AOD_84,Espessura Óptica do Aerossol 84
+CDD0,Graus-Dia de Resfriamento Acima de 0 °C
+CDD18_3,"Graus-Dia de Resfriamento Acima de 18,3 °C"
+CLOUD_AMT,Cobertura de Nuvens
+CLOUD_AMT_DAY,Cobertura de Nuvens Diurna
+CLOUD_AMT_NIGHT,Cobertura de Nuvens Noturna
+CLOUD_OD,Espessura Óptica Visível da Nuvem
+CLRSKY_DAYS,Dias de Céu Claro
+CLRSKY_KT,Índice de Claridade da Insolação sob Céu Claro
+CLRSKY_NKT,Índice de Claridade da Insolação Normalizado sob Céu Claro
+CLRSKY_SFC_LW_DWN,Irradiância de Onda Longa Descendente à Superfície sob Céu Claro
+CLRSKY_SFC_LW_UP,Irradiância de Ondas Longas Ascendente à Superfície sob Céu Claro
+CLRSKY_SFC_PAR_DIFF,PAR Difusa à Superfície sob Céu Claro
+CLRSKY_SFC_PAR_DIRH,PAR Direta Horizontal à Superfície sob Céu Claro
+CLRSKY_SFC_PAR_TOT,PAR Total à Superfície sob Céu Claro
+CLRSKY_SFC_SW_DIFF,Irradiância de Ondas Curtas Descendente Difusa à Superfície sob Céu Claro
+CLRSKY_SFC_SW_DIRH,Irradiância de Ondas Curtas Direta Horizontal à Superfície sob Céu Claro
+CLRSKY_SFC_SW_DNI,Irradiância de Ondas Curtas Descendente Direta Normal à Superfície sob Céu Claro
+CLRSKY_SFC_SW_DWN,Irradiância de Ondas Curtas Descendente à Superfície sob Céu Claro
+CLRSKY_SFC_SW_UP,Irradiância de Ondas Curtas Ascendente à Superfície sob Céu Claro
+CLRSKY_SRF_ALB,Albedo de Superfície sob Céu Claro
+DISPH,Altura de Deslocamento do Plano Zero
+EVLAND,Evaporação Terrestre
+EVPTRNS,Fluxo de Energia de Evapotranspiração
+FROST_DAYS,Dias de Geada
+GWETPROF,Umidade do Solo no Perfil
+GWETROOT,Umidade do Solo na Zona Radicular
+GWETTOP,Umidade do Solo Superficial
+HDD18_3,"Graus-Dia de Aquecimento Abaixo de 18,3 °C"
+MIDDAY_INSOL,Insolação Incidente ao Meio-Dia
+ORIGINAL_ALLSKY_SFC_SW_DIFF,Irradiância Difusa de Ondas Curtas na Superfície sob Todas as Condições de Céu
+ORIGINAL_ALLSKY_SFC_SW_DIRH,Irradiância Horizontal Direta de Ondas Curtas na Superfície sob Céu Total
+PBLTOP,Pressão no Topo da Camada Limite Planetária
+PRECTOTCORR,Precipitação Corrigida
+PS,Pressão à Superfície
+PSH,Hora de Sol de Pico
+PW,Água Precipitável
+QV10M,Umidade Específica a 10 Metros
+QV2M,Umidade Específica a 2 Metros
+RH2M,Umidade Relativa a 2 Metros
+RHOA,Densidade do Ar à Superfície
+SLP,Pressão ao Nível do Mar
+SNODP,Espessura da Neve
+SRF_ALB_ADJ,Albedo da Superfície Ajustado
+T10M,Temperatura a 10 Metros
+T10M_MAX,Temperatura Máxima a 10 Metros
+T10M_MIN,Temperatura Mínima a 10 Metros
+T10M_RANGE,Amplitude da Temperatura a 10 Metros
+T2M,Temperatura a 2 Metros
+T2MDEW,Ponto de Orvalho/Geada a 2 Metros
+T2MWET,Temperatura de Bulbo Úmido a 2 Metros
+T2M_MAX,Temperatura Máxima a 2 Metros
+T2M_MIN,Temperatura Mínima a 2 Metros
+T2M_RANGE,Amplitude da Temperatura a 2 Metros
+TO3,Coluna Total de Ozônio
+TOA_SW_DNI,Radiação Direta Normal de Ondas Curtas no Topo da Atmosfera
+TOA_SW_DWN,Irradiância de Ondas Curtas Descendente no Topo da Atmosfera
+TQV,Água Precipitável Total na Coluna
+TROPPB,Pressão da Tropopausa baseada em estimativa combinada
+TROPQ,Umidade Específica da Tropopausa usando estimativa combinada de TROPP
+TROPT,Temperatura da Tropopausa usando estimativa combinada de TROPP
+TS,Temperatura de Pele da Terra
+TSOIL1,Temperatura do Solo - Camada 1
+TSOIL2,Temperatura do Solo - Camada 2
+TSOIL3,Temperatura do Solo - Camada 3
+TSOIL4,Temperatura do Solo - Camada 4
+TSOIL5,Temperatura do Solo - Camada 5
+TSOIL6,Temperatura do Solo - Camada 6
+TSURF,Temperatura da Superfície do Solo e da Neve
+TS_ADJ,Temperatura de Pele da Terra Ajustada
+TS_MAX,Temperatura de Pele da Terra Máxima
+TS_MIN,Temperatura Mínima da Pele da Terra
+TS_RANGE,Amplitude da Temperatura da Pele da Terra
+U10M,Vento para Leste a 10 Metros
+U2M,Vento para Leste a 2 Metros
+U50M,Vento para Leste a 50 Metros
+V10M,Vento para Norte a 10 Metros
+V2M,Vento para Norte a 2 Metros
+V50M,Vento para Norte a 50 Metros
+WD10M,Direção do Vento a 10 Metros
+WD2M,Direção do Vento a 2 Metros
+WD50M,Direção do Vento a 50 Metros
+WS10M,Velocidade do Vento a 10 Metros
+WS10M_MAX,Velocidade Máxima do Vento a 10 Metros
+WS10M_MIN,Velocidade Mínima do Vento a 10 Metros
+WS10M_RANGE,Amplitude da Velocidade do Vento a 10 Metros
+WS2M,Velocidade do Vento a 2 Metros
+WS2M_MAX,Velocidade Máxima do Vento a 2 Metros
+WS2M_MIN,Velocidade Mínima do Vento a 2 Metros
+WS2M_RANGE,Amplitude da Velocidade do Vento a 2 Metros
+WS50M,Velocidade do Vento a 50 Metros
+WS50M_MAX,Velocidade Máxima do Vento a 50 Metros
+WS50M_MIN,Velocidade Mínima do Vento a 50 Metros
+WS50M_RANGE,Amplitude da Velocidade do Vento a 50 Metros
+Z0M,Rugosidade da Superfície
