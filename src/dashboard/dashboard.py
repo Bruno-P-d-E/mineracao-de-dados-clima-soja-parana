@@ -125,7 +125,7 @@ def carregar_dados():
 
         # ── Colunas derivadas ──────────────────────────────────────────────
         df[COL_AREA_PERD] = df[COL_AREA_P] - df[COL_AREA_C]
-        df[COL_PERDA_PCT] = (df[COL_AREA_PERD] / df[COL_AREA_P]) * 100
+        df[COL_PERDA_PCT] = np.where(df[COL_AREA_P] > 0,(df[COL_AREA_PERD] / df[COL_AREA_P]) * 100, 0.0)
 
         # ── Conversão de unidades + renomeação IMEDIATA ────────────────────
         # Toneladas → kg  (× 1 000)
@@ -348,9 +348,8 @@ df_agregado = (
 df_agregado[COL_REND] = (
     df_agregado[COL_PRODUCAO] / df_agregado[COL_AREA_C]
 )
-df_agregado[COL_PERDA_PCT] = (
-    df_agregado[COL_AREA_PERD] / df_agregado[COL_AREA_P] * 100
-)
+df_agregado[COL_PERDA_PCT] = np.where(df_agregado[COL_AREA_P] > 0, df_agregado[COL_AREA_PERD] / df_agregado[COL_AREA_P] * 100, 0.0)
+
 
 # ── Cache key derivada dos filtros ativos ─────────────────────────────────────
 cache_key_filtros = (
