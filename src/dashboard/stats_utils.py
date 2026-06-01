@@ -47,16 +47,16 @@ def formatar_correlacao_pvalor(
 
     corr_fmt = f"{corr:.{decimais_corr}f}".replace('.', ',')
     if pd.isna(p_valor):
-        return f"rho= {corr_fmt}, p−value= -"
+        return f"r= {corr_fmt}, p−value= -"
 
     limite = 10 ** (-decimais_pvalor)
     if usar_limite_pvalor and p_valor < limite:
         limite_fmt = f"{limite:.{decimais_pvalor}f}".replace('.', ',')
-        return f"rho= {corr_fmt}, p−value= < {limite_fmt}"
+        return f"r= {corr_fmt}, p−value= < {limite_fmt}"
 
     p_fmt = formatar_pvalor(
         p_valor,
         decimais_pvalor,
         notacao_cientifica=notacao_cientifica_pvalor,
     )
-    return f"rho= {corr_fmt}, p−value= {p_fmt}"
+    return f"r= {corr_fmt}, p−value= {p_fmt}"

@@ -858,6 +858,14 @@ for idx, row in top3.iterrows():
             st.plotly_chart(fig_scatter, use_container_width=True)
         with col2:
             st.info(f"📖 {label_atributo(row['Variável Climática'])}")
+            st.markdown("""
+            <style>
+            [data-testid="stMetricValue"] {
+                font-size: 1.75rem !important;
+            }
+            </style>
+            """, unsafe_allow_html=True)
+
             st.metric("Correlação", corr_fmt)
             intensidade = (
                 "🔴 Forte"    if abs(row['Correlação']) > 0.7 else
