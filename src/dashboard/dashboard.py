@@ -870,7 +870,7 @@ for idx, row in top3.iterrows():
                 st.markdown("""
                 <style>
                 div[data-testid="stVerticalBlock"] div[data-testid="stMetricValue"] {
-                    font-size: 1.95rem !important;
+                    font-size: 1.75rem !important;
                 }
                 </style>
                 """, unsafe_allow_html=True)
