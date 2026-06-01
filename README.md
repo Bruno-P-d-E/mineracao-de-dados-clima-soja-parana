@@ -72,7 +72,6 @@ Os notebooks de análise estão em `src/analise_exploratoria/`:
 ```bash
 streamlit run src/dashboard/dashboard.py
 ```
-![Dashboard](src/dashboard/Dashboard.png)
 
 https://dashboard-de-dados-clima-soja-parana.streamlit.app/
 
