@@ -36,34 +36,6 @@ Pipeline_TCC/
 └── README.md                  # Este arquivo
 ```
 
-##  Instalação
-
-### Pré-requisitos
-- Docker
-
-### Passos
-
-1. **Clonar o repositório**
-   ```bash
-   git clone https://github.com/Bruno-P-d-E/mineracao-de-dados-clima-soja-parana.git
-   cd mineracao-de-dados-clima-soja-parana
-   ```
-
-2. **Criar ambiente virtual**
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # Linux/Mac
-   # ou
-   venv\Scripts\activate  # Windows
-   ```
-
-3. **Instalar dependências**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-##  Uso
-
 ### Pré-processamento de Dados
 
 #### Extração de dados NASA POWER
@@ -86,7 +58,7 @@ python src/preprocessing/PAM_SIDRA.py
 python src/preprocessing/NASA_POWER_agregation.py
 ```
 
-#### Mesclar datasets
+#### Juntar bases de dados
 ```bash
 python src/preprocessing/merge.py
 ```
@@ -101,6 +73,8 @@ Os notebooks de análise estão em `src/analise_exploratoria/`:
 streamlit run src/dashboard/dashboard.py
 ```
 ![Dashboard](src/dashboard/Dashboard.png)
+
+https://dashboard-de-dados-clima-soja-parana.streamlit.app/
 
 ### Mineração de Dados
 
