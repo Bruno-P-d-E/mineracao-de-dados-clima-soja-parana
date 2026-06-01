@@ -866,7 +866,15 @@ for idx, row in top3.iterrows():
             </style>
             """, unsafe_allow_html=True)
 
-            st.metric("Correlação", corr_fmt)
+            with st.container():
+                st.markdown("""
+                <style>
+                div[data-testid="stVerticalBlock"] div[data-testid="stMetricValue"] {
+                    font-size: 1.95rem !important;
+                }
+                </style>
+                """, unsafe_allow_html=True)
+                st.metric("Correlação", corr_fmt)
             intensidade = (
                 "🔴 Forte"    if abs(row['Correlação']) > 0.7 else
                 "🟡 Moderada" if abs(row['Correlação']) > 0.4 else
