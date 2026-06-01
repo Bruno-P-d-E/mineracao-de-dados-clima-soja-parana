@@ -11,6 +11,11 @@ import re
 from scipy import stats
 from pathlib import Path
 
+try:
+    from .stats_utils import calcular_pearson, formatar_correlacao_pvalor
+except ImportError:
+    from stats_utils import calcular_pearson, formatar_correlacao_pvalor
+
 # ==========================================
 # NOMES CANÔNICOS DAS COLUNAS
 # Definidos uma única vez após conversão de unidades.
@@ -246,7 +251,7 @@ def calcular_correlacoes_por_ano(_df, metrica, cache_key):
         try:
             df_temp = _df[[col_clima, metrica]].dropna()
             if len(df_temp) > 5:
-                corr = df_temp.corr().iloc[0, 1]
+                corr, p_valor = calcular_pearson(df_temp, col_clima, metrica)
                 if not np.isnan(corr):
                     atributo   = col_clima.rsplit('_dec', 1)[0]
                     dec_match  = re.search(r'dec(\d+)', col_clima)
@@ -257,6 +262,7 @@ def calcular_correlacoes_por_ano(_df, metrica, cache_key):
                             'Decêndio':   int(dec_match.group(1)),
                             'Ano Safra':  f"ano{ano_match.group(1)}",
                             'Coluna':     col_clima,
+                            'P-valor':    p_valor,
                             'Correlação': corr,
                             'Correlação Abs': abs(corr)
                         })
@@ -712,13 +718,26 @@ if len(df_corr_foco) == 0:
     st.warning("⚠️ Não há dados suficientes para calcular correlações com os filtros selecionados.")
     st.stop()
 
-df_corr_foco = df_corr_foco.nlargest(min(top_n, len(df_corr_foco)), 'Correlação Abs')
+df_corr_foco = (
+    df_corr_foco
+    .nlargest(top_n, 'Correlação Abs')
+)
 
 
 
 st.subheader(f"🔝 Top {len(df_corr_foco)} Variáveis com Maior Impacto – {titulo_ano}")
 
-texto_corr = df_corr_foco['Correlação'].apply(lambda x: f"{x:.3f}".replace('.', ','))
+texto_corr = df_corr_foco.apply(
+    lambda row: formatar_correlacao_pvalor(
+        row['Correlação'],
+        row['P-valor'],
+        decimais_corr=3,
+        decimais_pvalor=2,
+        usar_limite_pvalor=False,
+        notacao_cientifica_pvalor=True,
+    ),
+    axis=1
+)
 fig_top = go.Figure()
 fig_top.add_trace(go.Bar(
     x=df_corr_foco['Correlação'],
@@ -736,7 +755,11 @@ fig_top.update_layout(
     font=dict(color='black'), separators=',.',
 )
 fig_top.update_xaxes(tickfont=dict(color='black'), title_font=dict(color='black'))
-fig_top.update_yaxes(tickfont=dict(color='black'), title_font=dict(color='black'))
+fig_top.update_yaxes(
+    tickfont=dict(color='black'),
+    title_font=dict(color='black'),
+    autorange='reversed',
+)
 fig_top.add_vline(x=0, line_dash="dash", line_color="#000000")
 st.plotly_chart(fig_top, use_container_width=True)
 
@@ -777,17 +800,25 @@ st.info(f"📊 Análise baseada em **{formatar_numero(n_pontos)} registros** ({t
 
 top3 = df_corr_foco.head(3)
 for idx, row in top3.iterrows():
-    corr_fmt = str(round(row['Correlação'], 4)).replace('.', ',')
+    corr_fmt = formatar_correlacao_pvalor(
+        row['Correlação'],
+        row['P-valor'],
+        decimais_corr=4,
+        decimais_pvalor=2,
+        usar_limite_pvalor=False,
+        notacao_cientifica_pvalor=True,
+    )
 
     with st.expander(
         f"**{idx + 1}. {label_atributo(row['Variável Climática'])}"
-        f"  ·  dec{row['Decêndio']} {row['Ano Safra']}  |  r = {corr_fmt}**"
+        f"  ·  dec{row['Decêndio']} {row['Ano Safra']}  | {corr_fmt}**"
     ):
         col1, col2 = st.columns([2, 1])
         with col1:
-            df_scatter = df_para_correlacao[
-                [row['Coluna'], metrica_foco, 'ano', 'Município', COL_PRODUCAO]
-            ].dropna()
+            cols_scatter = list(dict.fromkeys([
+                row['Coluna'], metrica_foco, 'ano', 'Município', COL_PRODUCAO
+            ]))
+            df_scatter = df_para_correlacao[cols_scatter].dropna()
             titulo_scatter = (
                 f"Dispersão ({metrica_foco.split('(')[0].strip()}) "
                 f"× {label_atributo(row['Variável Climática'])}"
@@ -815,7 +846,13 @@ for idx, row in top3.iterrows():
                         mode='lines', name='Tendência',
                         line=dict(color='red', dash='dash', width=2),
                     ))
-            fig_scatter.update_layout(height=400, font=dict(color='black'), separators=',.')
+            fig_scatter.update_layout(
+    title=dict(
+        text=titulo_scatter,
+        y=0.98
+    ),
+    margin=dict(l=80, t=100)
+)
             fig_scatter.update_xaxes(tickfont=dict(color='black'), title_font=dict(color='black'))
             fig_scatter.update_yaxes(tickfont=dict(color='black'), title_font=dict(color='black'))
             st.plotly_chart(fig_scatter, use_container_width=True)
@@ -870,13 +907,14 @@ if vars_heatmap:
                 try:
                     df_temp = df_para_correlacao[[col_name, metrica_foco]].dropna()
                     if len(df_temp) > 5:
-                        corr = df_temp.corr().iloc[0, 1]
+                        corr, p_valor = calcular_pearson(df_temp, col_name, metrica_foco)
                         if not np.isnan(corr):
                             heatmap_data.append({
                                 'Variável':        var_clima,
                                 'Período':         f"Ano1_Dec{dec_num}",
                                 'Decêndio_Order':  dec_num - 26,
                                 'Correlação':      corr,
+                                'P-valor':         p_valor,
                             })
                 except Exception:
                     pass
@@ -886,13 +924,14 @@ if vars_heatmap:
                 try:
                     df_temp = df_para_correlacao[[col_name, metrica_foco]].dropna()
                     if len(df_temp) > 5:
-                        corr = df_temp.corr().iloc[0, 1]
+                        corr, p_valor = calcular_pearson(df_temp, col_name, metrica_foco)
                         if not np.isnan(corr):
                             heatmap_data.append({
                                 'Variável':        var_clima,
                                 'Período':         f"Ano2_Dec{dec_num}",
                                 'Decêndio_Order':  11 + (dec_num - 1),
                                 'Correlação':      corr,
+                                'P-valor':         p_valor,
                             })
                 except Exception:
                     pass
