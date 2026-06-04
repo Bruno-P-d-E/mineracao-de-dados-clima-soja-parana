@@ -76,9 +76,9 @@ def aplicar_correcao_ipca(df,
     Aplica correção IPCA a um DataFrame de produção agrícola.
     
     Cria 3 novas colunas:
-    - Fator_Correcao: fator aplicado ao ano
-    - Valor_Corrigido: valor nominal corrigido para a base (em mil reais)
-    - Valor_por_Ha: valor corrigido dividido pela área plantada
+    - fator_correcao_ipca: fator aplicado ao ano
+    - valor_producao_ipca_mil_reais: valor nominal corrigido para a base
+    - valor_producao_ipca_mil_reais_ha: valor corrigido dividido pela área plantada
     
     Parameters
     ----------
@@ -112,7 +112,7 @@ def aplicar_correcao_ipca(df,
     >>> 
     >>> df = pd.read_csv('data/interim/PAM_SIDRA/PAM_SIDRA.csv')
     >>> df_corrigido = aplicar_correcao_ipca(df)
-    >>> df_corrigido[['Município', 'Ano', 'valor_corrigido', 'valor_por_ha']].head()
+    >>> df_corrigido[['Município', 'Ano', 'valor_producao_ipca_mil_reais', 'valor_producao_ipca_mil_reais_ha']].head()
     """
     
     # Validar colunas obrigatórias
@@ -128,14 +128,14 @@ def aplicar_correcao_ipca(df,
     fatores = calcular_fatores_acumulados(ano_base=ano_base)
     
     # Aplicar correção
-    df['fator_correcao'] = df[col_ano].map(fatores)
-    df['valor_corrigido'] = df[col_valor] * df['fator_correcao']
+    df['fator_correcao_ipca'] = df[col_ano].map(fatores)
+    df['valor_producao_ipca_mil_reais'] = df[col_valor] * df['fator_correcao_ipca']
     
     # Calcular valor por hectare
-    df['valor_por_ha'] = df['valor_corrigido'] / df[col_area]
+    df['valor_producao_ipca_mil_reais_ha'] = df['valor_producao_ipca_mil_reais'] / df[col_area]
     
     # Substituir infinitos e NaN
-    df['valor_por_ha'] = df['valor_por_ha'].replace([np.inf, -np.inf], np.nan)
+    df['valor_producao_ipca_mil_reais_ha'] = df['valor_producao_ipca_mil_reais_ha'].replace([np.inf, -np.inf], np.nan)
     
     if verbose:
         print("\n" + "─" * 70)
@@ -146,10 +146,10 @@ def aplicar_correcao_ipca(df,
             ipca = IPCA_DATA[ano]
             print(f"  {ano}: IPCA {ipca:>6.2f}% → Fator = {fatores[ano]:>10.6f}")
         
-        print(f"\nEstatísticas - Valor_por_Ha (mil reais/ha, base {ano_base}):")
-        print(f"  Média:      R$ {df['valor_por_ha'].mean():.2f} mil/ha")
-        print(f"  Mediana:    R$ {df['valor_por_ha'].median():.2f} mil/ha")
-        print(f"  Range:      [R$ {df['valor_por_ha'].min():.2f}, R$ {df['valor_por_ha'].max():.2f}] mil/ha")
+        print(f"\nEstatísticas - valor_producao_ipca_mil_reais_ha (base {ano_base}):")
+        print(f"  Média:      R$ {df['valor_producao_ipca_mil_reais_ha'].mean():.2f} mil/ha")
+        print(f"  Mediana:    R$ {df['valor_producao_ipca_mil_reais_ha'].median():.2f} mil/ha")
+        print(f"  Range:      [R$ {df['valor_producao_ipca_mil_reais_ha'].min():.2f}, R$ {df['valor_producao_ipca_mil_reais_ha'].max():.2f}] mil/ha")
         print("─" * 70 + "\n")
     
     return df
@@ -159,4 +159,4 @@ if __name__ == "__main__":
     # Teste rápido
     df_teste = pd.read_csv('data/interim/PAM_SIDRA/PAM_SIDRA.csv')
     df_corrigido = aplicar_correcao_ipca(df_teste)
-    print(df_corrigido[['Município', 'Ano', 'valor_corrigido', 'valor_por_ha']].head(10))
+    print(df_corrigido[['Município', 'Ano', 'valor_producao_ipca_mil_reais', 'valor_producao_ipca_mil_reais_ha']].head(10))

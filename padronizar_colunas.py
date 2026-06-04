@@ -13,9 +13,9 @@ Mapeamento:
   Área colhida (Hectares) → area_colhida_ha
   Área colhida - percentual do total geral → area_colhida_pct
   Quantidade produzida (Toneladas) → quantidade_produzida_ton
-  Rendimento médio da produção (Quilogramas por Hectare) → rendimento_kg_ha
+  Rendimento médio da produção (Quilogramas por Hectare) → produtividade_kg_ha
   Valor da produção (Mil Reais) → valor_producao_mil_reais
-  Valor da produção - percentual do total geral → valor_producao_pct
+  Valor da produção - percentual do total geral → participacao_valor_pct
 """
 
 import pandas as pd
@@ -30,9 +30,9 @@ RENAME_MAP = {
     'Área colhida (Hectares)': 'area_colhida_ha',
     'Área colhida - percentual do total geral': 'area_colhida_pct',
     'Quantidade produzida (Toneladas)': 'quantidade_produzida_ton',
-    'Rendimento médio da produção (Quilogramas por Hectare)': 'rendimento_kg_ha',
+    'Rendimento médio da produção (Quilogramas por Hectare)': 'produtividade_kg_ha',
     'Valor da produção (Mil Reais)': 'valor_producao_mil_reais',
-    'Valor da produção - percentual do total geral': 'valor_producao_pct',
+    'Valor da produção - percentual do total geral': 'participacao_valor_pct',
 }
 
 def padronizar_colunas(df):

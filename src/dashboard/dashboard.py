@@ -23,9 +23,9 @@ except ImportError:
 # ==========================================
 COL_PRODUCAO  = 'producao_kg'                       # convertido de Toneladas × 1000
 COL_VALOR     = 'valor_producao_rs'                 # convertido de Mil Reais × 1000
-COL_VALOR_CORRIGIDO = 'valor_corrigido_rs'          # Valor em R$ 2024 (base IPCA)
-COL_VALOR_POR_HA = 'valor_por_ha'                   # Valor por hectare (R$ 2024)
-COL_FATOR_CORRECAO = 'fator_correcao'               # Fator de deflação IPCA
+COL_VALOR_CORRIGIDO = 'valor_producao_ipca_rs'      # Valor em R$ 2024 (base IPCA)
+COL_VALOR_POR_HA = 'valor_producao_ipca_mil_reais_ha'
+COL_FATOR_CORRECAO = 'fator_correcao_ipca'          # Fator de deflação IPCA
 COL_AREA_P    = 'area_plantada_ha'
 COL_AREA_C    = 'area_colhida_ha'
 COL_AREA_PERD        = 'area_perdida_ha'
@@ -42,6 +42,7 @@ LABEL_COLUNAS = {
     COL_REND: 'Produtividade (kg/ha)',
     COL_VALOR: 'Valor da Produção (R$)',
     COL_VALOR_CORRIGIDO: 'Valor Corrigido (R$)',
+    COL_VALOR_POR_HA: 'Valor Corrigido IPCA (mil R$/ha)',
     COL_VALOR_PCT: 'Participação no Valor (%)',
     COL_PERDA_PCT: 'Taxa de Perda (%)',
 }
@@ -124,11 +125,6 @@ h1 {
 """, unsafe_allow_html=True)
 
 st.markdown("<h1>🌱 Dashboard - Soja no Paraná (2018-2024)</h1>", unsafe_allow_html=True)
-st.markdown(
-    "<h3 style='text-align: center; color: #000000;'>"
-    "Análise Inteligente: Clima + Produtividade + Geolocalização</h3>",
-    unsafe_allow_html=True
-)
 
 # ==========================================
 # CARREGAMENTO DE DADOS
@@ -149,15 +145,15 @@ def carregar_dados():
                 COL_REND,
             'valor_producao_pct':
                 COL_VALOR_PCT,
+            'valor_producao_ipca_mil_reais':
+                COL_VALOR_CORRIGIDO,
+            'valor_producao_ipca_mil_reais_ha':
+                COL_VALOR_POR_HA,
             'valor_corrigido':
                 COL_VALOR_CORRIGIDO,
             'valor_por_ha':
                 COL_VALOR_POR_HA,
-            'Valor_Corrigido':
-                COL_VALOR_CORRIGIDO,
-            'Valor_por_Ha':
-                COL_VALOR_POR_HA,
-            'Fator_Correcao':
+            'fator_correcao':
                 COL_FATOR_CORRECAO,
             'ano':         'ano',
             'mesorregiao': 'Mesorregião',
@@ -177,11 +173,12 @@ def carregar_dados():
         df[COL_PRODUCAO] = df['quantidade_produzida_ton'] * 1_000
         df.drop(columns=['quantidade_produzida_ton'], inplace=True)
 
-        # ── Prioridade de Valor: Valor_Corrigido (IPCA 2024) > Valor nominal
-        # Se Valor_Corrigido existe (vem do merge com correção IPCA), use em reais
+        # ── Prioridade de Valor: correção IPCA 2024 > Valor nominal
+        # Se valor_producao_ipca_mil_reais existe, converte para R$ no dashboard.
         if COL_VALOR_CORRIGIDO in df.columns:
-            # Valor_Corrigido já está em Mil Reais base 2024, converter para R$
+            # Valor corrigido pelo IPCA vem em mil reais no parquet; converter para R$.
             df[COL_VALOR] = df[COL_VALOR_CORRIGIDO] * 1_000
+            df[COL_VALOR_CORRIGIDO] = df[COL_VALOR]
             if COL_VALOR_POR_HA in df.columns:
                 df[COL_VALOR_POR_HA] = df[COL_VALOR_POR_HA]  # já existe, apenas renomeia
             if COL_FATOR_CORRECAO in df.columns:
@@ -388,7 +385,7 @@ st.sidebar.metric("Variáveis Climáticas", len(colunas_climaticas))
 
 # ==========================================
 # AGREGAÇÃO ANUAL
-# FIX: rendimento recalculado como média ponderada (produção / área colhida)
+# FIX: produtividade recalculada como média ponderada (produção / área colhida)
 # FIX: percentual de perda recalculado sobre os totais anuais
 # FIX: sort_values garante ordem cronológica antes de iloc
 # ==========================================
@@ -449,7 +446,7 @@ if len(anos_selecionados) == 0:
 elif len(anos_selecionados) == 1:
     ano_unico          = anos_selecionados[0]
     titulo_metricas    = f"📊 Indicadores Principais – {ano_unico}"
-    descricao_metricas = f"📋 Indicadores de produção e rendimento de soja para o ano de {ano_unico}."
+    descricao_metricas = f"📋 Indicadores de produção e produtividade de soja para o ano de {ano_unico}."
 else:
     ano_ini = min(anos_selecionados)
     ano_fim = max(anos_selecionados)
@@ -477,7 +474,7 @@ if len(df_agregado) > 0:
     soma_valor         = df_agregado[COL_VALOR].sum()
 
     # Produtividade consolidada: média ponderada = Σprodução / Σárea_colhida
-    rendimento_consolidado = soma_producao / soma_area_colhida if soma_area_colhida > 0 else np.nan
+    produtividade_consolidada = soma_producao / soma_area_colhida if soma_area_colhida > 0 else np.nan
 
     # % de perda consolidada: calculada sobre os totais, não média de médias
     perda_pct_consolidada  = (soma_area_perdida / soma_area_plantada * 100) if soma_area_plantada > 0 else np.nan
@@ -526,21 +523,21 @@ if len(df_agregado) > 0:
         val_area_p   = ultimo_ano[COL_AREA_P]
         val_area_perd = ultimo_ano[COL_AREA_PERD]
         val_prod     = ultimo_ano[COL_PRODUCAO]
-        val_rend     = ultimo_ano[COL_REND]
+        val_produtividade = ultimo_ano[COL_REND]
         val_perda    = ultimo_ano[COL_PERDA_PCT]
-        d_area_p = d_area_perd = d_prod = d_rend = d_perda = None
+        d_area_p = d_area_perd = d_prod = d_produtividade = d_perda = None
     else:
         # Período: consolidado; delta = último ano vs. primeiro ano da seleção
         val_area_p    = soma_area_plantada
         val_area_perd = soma_area_perdida
         val_prod      = soma_producao
-        val_rend      = rendimento_consolidado
+        val_produtividade = produtividade_consolidada
         val_perda     = perda_pct_consolidada
 
         d_area_p    = delta_pct_fmt(ultimo_ano[COL_AREA_P],    primeiro_ano[COL_AREA_P],    sufixo_abs=' ha')
         d_area_perd = delta_pct_fmt(ultimo_ano[COL_AREA_PERD], primeiro_ano[COL_AREA_PERD], sufixo_abs=' ha', sempre_pct=True)
         d_prod      = delta_pct_fmt(ultimo_ano[COL_PRODUCAO],  primeiro_ano[COL_PRODUCAO],  sufixo_abs=' kg')
-        d_rend      = delta_pct_fmt(ultimo_ano[COL_REND],      primeiro_ano[COL_REND],      sufixo_abs=' kg/ha')
+        d_produtividade = delta_pct_fmt(ultimo_ano[COL_REND],      primeiro_ano[COL_REND],      sufixo_abs=' kg/ha')
         d_perda     = delta_pp_fmt( ultimo_ano[COL_PERDA_PCT],  primeiro_ano[COL_PERDA_PCT])
 
     ano_ref_label = (
@@ -576,8 +573,8 @@ if len(df_agregado) > 0:
     with col4:
         st.metric(
             "Produtividade (kg/ha)",
-            formatar_inteligente(val_rend, sufixo=' kg/ha'),
-            d_rend,
+            formatar_inteligente(val_produtividade, sufixo=' kg/ha'),
+            d_produtividade,
             help=(
                 "Média ponderada pela área colhida: Σ(produção) ÷ Σ(área colhida). "
                 f"Evita distorção por anos com áreas menores. {ano_ref_label}."
@@ -624,23 +621,23 @@ if len(df_agregado) > 0:
         
         col_ec1, col_ec2, col_ec3 = st.columns(3)
         
-        soma_valor_corrigido = df_agregado[COL_VALOR_CORRIGIDO].sum()
+        soma_valor_ipca_rs = df_agregado[COL_VALOR_CORRIGIDO].sum()
         d_valor_ec = delta_pct_fmt(
             ultimo_ano[COL_VALOR_CORRIGIDO], 
             primeiro_ano[COL_VALOR_CORRIGIDO], 
-            sufixo_abs=' mil reais'
+            sufixo_abs=' reais'
         ) if COL_VALOR_CORRIGIDO in df_agregado.columns else None
         
         with col_ec1:
             st.metric(
                 "Valor Corrigido (R$)",
-                formatar_inteligente(soma_valor_corrigido, prefixo='R$ ', sufixo=' mil'),
+                formatar_inteligente(soma_valor_ipca_rs, prefixo='R$ '),
                 d_valor_ec,
                 help=f"Soma do valor de produção corrigido pela inflação IPCA (base 2024). {ano_ref_label}.",
             )
         
         if COL_VALOR_POR_HA in df_agregado.columns:
-            media_valor_por_ha = df_agregado[COL_VALOR_POR_HA].mean()
+            media_valor_ipca_mil_reais_ha = df_agregado[COL_VALOR_POR_HA].mean()
             d_valor_ha = delta_pct_fmt(
                 ultimo_ano[COL_VALOR_POR_HA], 
                 primeiro_ano[COL_VALOR_POR_HA],
@@ -650,7 +647,7 @@ if len(df_agregado) > 0:
             with col_ec2:
                 st.metric(
                     "Valor Corrigido por ha",
-                    formatar_inteligente(media_valor_por_ha, prefixo='R$ ', sufixo=' mil/ha'),
+                    formatar_inteligente(media_valor_ipca_mil_reais_ha, prefixo='R$ ', sufixo=' mil/ha'),
                     d_valor_ha,
                     help=f"Valor corrigido dividido pela área plantada, indicador de rentabilidade. {ano_ref_label}.",
                 )
@@ -761,11 +758,10 @@ with col2:
     titulo_valor = 'Valor Corrigido (R$)' if col_valor_exibir == COL_VALOR_CORRIGIDO else 'Valor da Produção (R$)'
     
     texto_valor = df_agregado[col_valor_exibir].apply(
-        lambda x: f"R$ {formatar_inteligente(x / 1000) if col_valor_exibir == COL_VALOR else formatar_inteligente(x)}"
+        lambda x: f"R$ {formatar_inteligente(x)}"
     )
     fig4 = go.Figure()
 
-    # Se usando valor em reais (COL_VALOR), divide por 1000 para mostrar em mil
     y_valores = df_agregado[col_valor_exibir] if col_valor_exibir == COL_VALOR_CORRIGIDO else df_agregado[col_valor_exibir]
 
     fig4.add_trace(go.Bar(
@@ -774,7 +770,7 @@ with col2:
     ))
     fig4.update_layout(
         title=f'<b>{titulo_valor}</b>',
-        xaxis_title='ano', yaxis_title='R$ (mil)' if col_valor_exibir == COL_VALOR_CORRIGIDO else 'R$',
+        xaxis_title='ano', yaxis_title='Valor Corrigido (R$)' if col_valor_exibir == COL_VALOR_CORRIGIDO else 'Valor da Produção (R$)',
         height=400,
         yaxis=dict(range=[0, y_valores.max() * 1.15]),
         font=dict(color='black'), separators=',.',
@@ -788,7 +784,7 @@ with col2:
 # MATRIZ DE CORRELAÇÃO
 # ==========================================
 st.header("🔗 Matriz de Correlação (Variáveis de Produção)")
-st.info("📊 Correlação de Pearson entre as variáveis de área, produção, rendimento e valor.")
+st.info("📊 Correlação de Pearson entre as variáveis de área, produção, produtividade e valor.")
 
 cols_correlacao = [
     COL_AREA_P,
@@ -1220,7 +1216,7 @@ st.info("📋 Acompanhamento da evolução anual dos principais municipios produ
 num_municipios = st.slider("Número de municipios no ranking:", 3, 15, 5)
 
 top_prod_municipios  = df_filtrado.groupby('municipio')[COL_PRODUCAO].mean().nlargest(num_municipios).index
-top_rend_municipios  = df_filtrado.groupby('municipio')[COL_REND].mean().nlargest(num_municipios).index
+top_produtividade_municipios = df_filtrado.groupby('municipio')[COL_REND].mean().nlargest(num_municipios).index
 top_area_municipios  = df_filtrado.groupby('municipio')[COL_AREA_P].mean().nlargest(num_municipios).index
 top_valor_municipios = df_filtrado.groupby('municipio')[COL_VALOR].mean().nlargest(num_municipios).index
 
@@ -1248,7 +1244,7 @@ with col1:
 
 with col2:
     fig_r = go.Figure()
-    for municipio in top_rend_municipios:
+    for municipio in top_produtividade_municipios:
         dm = df_filtrado[df_filtrado['municipio'] == municipio].sort_values('ano')
         fig_r.add_trace(go.Scatter(
             x=dm['ano'], y=dm[COL_REND],

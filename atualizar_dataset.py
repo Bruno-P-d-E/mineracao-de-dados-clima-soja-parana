@@ -2,8 +2,8 @@
 # -*- coding: utf-8 -*-
 """
 Script para atualizar o dataset com:
-1. Coluna Valor_Corrigido (corrigido por IPCA)
-2. Coluna Valor_por_Ha
+1. Coluna valor_producao_ipca_mil_reais (corrigido por IPCA)
+2. Coluna valor_producao_ipca_mil_reais_ha
 3. Matriz de correlação de Pearson
 """
 
@@ -88,23 +88,23 @@ def main():
     col_ano = 'Ano'
     
     # Aplicar fator de correção consolidado
-    df['Fator_Correcao'] = df[col_ano].map(FATORES_ACUMULADOS)
-    df['Valor_Corrigido'] = df[col_valor] * df['Fator_Correcao']
+    df['fator_correcao_ipca'] = df[col_ano].map(FATORES_ACUMULADOS)
+    df['valor_producao_ipca_mil_reais'] = df[col_valor] * df['fator_correcao_ipca']
     
     # Calcular valor por hectare
-    df['Valor_por_Ha'] = df['Valor_Corrigido'] / df[col_area]
+    df['valor_producao_ipca_mil_reais_ha'] = df['valor_producao_ipca_mil_reais'] / df[col_area]
     
     # Substituir infinitos e NaN por 0
-    df['Valor_por_Ha'] = df['Valor_por_Ha'].replace([np.inf, -np.inf], np.nan)
+    df['valor_producao_ipca_mil_reais_ha'] = df['valor_producao_ipca_mil_reais_ha'].replace([np.inf, -np.inf], np.nan)
     
-    print("      ✓ Coluna 'Valor_Corrigido' criada (base 2024)")
-    print("      ✓ Coluna 'Valor_por_Ha' criada")
+    print("      ✓ Coluna 'valor_producao_ipca_mil_reais' criada (base 2024)")
+    print("      ✓ Coluna 'valor_producao_ipca_mil_reais_ha' criada")
     
     # ─── 5. Matriz de Correlação de Pearson ───────────────────────────────
     print("\n[5/5] Calculando matriz de correlação de Pearson...")
     
     # Selecionar colunas para análise
-    variaveis_analise = ['Valor_por_Ha', col_rendimento]
+    variaveis_analise = ['valor_producao_ipca_mil_reais_ha', col_rendimento]
     
     # Adicionar variáveis climáticas (primeiras 10 como exemplo)
     variaveis_climaticas = [col for col in df.columns if any(
@@ -138,15 +138,15 @@ def main():
     print("=" * 80)
     
     print("\nÚltimas 5 linhas do dataset atualizado:")
-    cols_exibir = ['Município', col_ano, col_area, col_valor, 'Valor_Corrigido', 'Valor_por_Ha', col_rendimento]
+    cols_exibir = ['Município', col_ano, col_area, col_valor, 'valor_producao_ipca_mil_reais', 'valor_producao_ipca_mil_reais_ha', col_rendimento]
     print(df[cols_exibir].tail())
     
-    print(f"\nEstatísticas - Valor_por_Ha (em mil reais/ha, base 2024):")
-    print(f"  Média:      R$ {df['Valor_por_Ha'].mean():.2f} mil/ha")
-    print(f"  Mediana:    R$ {df['Valor_por_Ha'].median():.2f} mil/ha")
-    print(f"  Mínimo:     R$ {df['Valor_por_Ha'].min():.2f} mil/ha")
-    print(f"  Máximo:     R$ {df['Valor_por_Ha'].max():.2f} mil/ha")
-    print(f"  Desvio Pad: R$ {df['Valor_por_Ha'].std():.2f} mil/ha")
+    print(f"\nEstatísticas - valor_producao_ipca_mil_reais_ha (base 2024):")
+    print(f"  Média:      R$ {df['valor_producao_ipca_mil_reais_ha'].mean():.2f} mil/ha")
+    print(f"  Mediana:    R$ {df['valor_producao_ipca_mil_reais_ha'].median():.2f} mil/ha")
+    print(f"  Mínimo:     R$ {df['valor_producao_ipca_mil_reais_ha'].min():.2f} mil/ha")
+    print(f"  Máximo:     R$ {df['valor_producao_ipca_mil_reais_ha'].max():.2f} mil/ha")
+    print(f"  Desvio Pad: R$ {df['valor_producao_ipca_mil_reais_ha'].std():.2f} mil/ha")
     
     print(f"\nEstatísticas - {col_rendimento}:")
     print(f"  Média:      {df[col_rendimento].mean():.2f} kg/ha")
@@ -154,8 +154,8 @@ def main():
     print(f"  Mínimo:     {df[col_rendimento].min():.2f} kg/ha")
     print(f"  Máximo:     {df[col_rendimento].max():.2f} kg/ha")
     
-    print("\nCorrelações com Valor_por_Ha (Top 10):")
-    print(matriz_correlacao['Valor_por_Ha'].sort_values(ascending=False).head(10))
+    print("\nCorrelações com valor_producao_ipca_mil_reais_ha (Top 10):")
+    print(matriz_correlacao['valor_producao_ipca_mil_reais_ha'].sort_values(ascending=False).head(10))
     
     print(f"\nCorrelações com {col_rendimento} (Top 10):")
     print(matriz_correlacao[col_rendimento].sort_values(ascending=False).head(10))
