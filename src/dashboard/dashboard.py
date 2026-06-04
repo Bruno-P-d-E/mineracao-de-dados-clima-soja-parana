@@ -21,17 +21,34 @@ except ImportError:
 # Definidos uma única vez após conversão de unidades.
 # Qualquer referência futura usa estas constantes.
 # ==========================================
-COL_PRODUCAO  = 'Quantidade produzida (kg)'        # convertido de Toneladas × 1000
-COL_VALOR     = 'Valor da produção (R$)'            # convertido de Mil Reais × 1000
-COL_VALOR_CORRIGIDO = 'valor_corrigido'             # Valor em R$ 2024 (base IPCA)
-COL_VALOR_POR_HA = 'Valor_por_Ha'                   # Valor por hectare (R$ 2024)
-COL_FATOR_CORRECAO = 'Fator_Correcao'               # Fator de deflação IPCA
-COL_AREA_P    = 'Área plantada (Hectares)'
+COL_PRODUCAO  = 'producao_kg'                       # convertido de Toneladas × 1000
+COL_VALOR     = 'valor_producao_rs'                 # convertido de Mil Reais × 1000
+COL_VALOR_CORRIGIDO = 'valor_corrigido_rs'          # Valor em R$ 2024 (base IPCA)
+COL_VALOR_POR_HA = 'valor_por_ha'                   # Valor por hectare (R$ 2024)
+COL_FATOR_CORRECAO = 'fator_correcao'               # Fator de deflação IPCA
+COL_AREA_P    = 'area_plantada_ha'
 COL_AREA_C    = 'area_colhida_ha'
-COL_AREA_PERD        = 'Área perdida (Hectares)'
-COL_AREA_PERD_POR_HA = 'Área perdida por Hectare'
-COL_REND      = 'rendimento_kg_ha'
-COL_PERDA_PCT = 'Percentual de perda (%)'
+COL_AREA_PERD        = 'area_perdida_ha'
+COL_AREA_PERD_POR_HA = 'area_perdida_por_ha'
+COL_REND      = 'produtividade_kg_ha'
+COL_VALOR_PCT = 'participacao_valor_pct'
+COL_PERDA_PCT = 'taxa_perda_pct'
+
+LABEL_COLUNAS = {
+    COL_AREA_P: 'Área Plantada (ha)',
+    COL_AREA_C: 'Área Colhida (ha)',
+    COL_AREA_PERD: 'Área Perdida (ha)',
+    COL_PRODUCAO: 'Produção (kg)',
+    COL_REND: 'Produtividade (kg/ha)',
+    COL_VALOR: 'Valor da Produção (R$)',
+    COL_VALOR_CORRIGIDO: 'Valor Corrigido (R$)',
+    COL_VALOR_PCT: 'Participação no Valor (%)',
+    COL_PERDA_PCT: 'Taxa de Perda (%)',
+}
+
+
+def label_coluna(coluna):
+    return LABEL_COLUNAS.get(coluna, coluna)
 
 # ==========================================
 # FORMATAÇÃO PT-BR
@@ -127,7 +144,21 @@ def carregar_dados():
             'area_plantada_ha':
                 COL_AREA_P,
             'area_plantada_pct':
-                'Área plantada - percentual do total geral',
+                'area_plantada_pct',
+            'rendimento_kg_ha':
+                COL_REND,
+            'valor_producao_pct':
+                COL_VALOR_PCT,
+            'valor_corrigido':
+                COL_VALOR_CORRIGIDO,
+            'valor_por_ha':
+                COL_VALOR_POR_HA,
+            'Valor_Corrigido':
+                COL_VALOR_CORRIGIDO,
+            'Valor_por_Ha':
+                COL_VALOR_POR_HA,
+            'Fator_Correcao':
+                COL_FATOR_CORRECAO,
             'ano':         'ano',
             'mesorregiao': 'Mesorregião',
         })
@@ -148,11 +179,9 @@ def carregar_dados():
 
         # ── Prioridade de Valor: Valor_Corrigido (IPCA 2024) > Valor nominal
         # Se Valor_Corrigido existe (vem do merge com correção IPCA), use em reais
-        if 'valor_corrigido' in df.columns:
+        if COL_VALOR_CORRIGIDO in df.columns:
             # Valor_Corrigido já está em Mil Reais base 2024, converter para R$
-            df[COL_VALOR] = df['valor_corrigido'] * 1_000
-            # Manter colunas econômicas corrigidas
-            df[COL_VALOR_CORRIGIDO] = df['valor_corrigido']
+            df[COL_VALOR] = df[COL_VALOR_CORRIGIDO] * 1_000
             if COL_VALOR_POR_HA in df.columns:
                 df[COL_VALOR_POR_HA] = df[COL_VALOR_POR_HA]  # já existe, apenas renomeia
             if COL_FATOR_CORRECAO in df.columns:
@@ -164,13 +193,6 @@ def carregar_dados():
             st.info("ℹ️ Dados em valores nominais (sem correção IPCA)")
 
         df.drop(columns=['valor_producao_mil_reais'], inplace=True)
-
-        # Também renomeia a coluna de % do valor se vier do dataset original
-        if 'valor_producao_pct' in df.columns:
-            df = df.rename(columns={
-                'valor_producao_pct':
-                    'valor_producao_pct'
-            })
 
         # ── Chave numérica para o mapa ─────────────────────────────────────
         df['codigo_ibge'] = (
@@ -439,7 +461,7 @@ else:
     titulo_metricas    = f"📊 Indicadores Principais – {periodo_label} (consolidado)"
     descricao_metricas = (
         f"📋 **Área plantada, área perdida e produção** exibem a **soma total** do período {periodo_label}. "
-        f"**Rendimento** e **% de perda** são calculados sobre os **totais agregados** (média ponderada pela área). "
+        f"**Produtividade** e **taxa de perda** são calculadas sobre os **totais agregados** (média ponderada pela área). "
         f"O delta (▲▼) compara **{ano_fim} versus {ano_ini}**."
     )
 
@@ -454,7 +476,7 @@ if len(df_agregado) > 0:
     soma_producao      = df_agregado[COL_PRODUCAO].sum()
     soma_valor         = df_agregado[COL_VALOR].sum()
 
-    # Rendimento consolidado: média ponderada = Σprodução / Σárea_colhida
+    # Produtividade consolidada: média ponderada = Σprodução / Σárea_colhida
     rendimento_consolidado = soma_producao / soma_area_colhida if soma_area_colhida > 0 else np.nan
 
     # % de perda consolidada: calculada sobre os totais, não média de médias
@@ -531,14 +553,14 @@ if len(df_agregado) > 0:
 
     with col1:
         st.metric(
-            "Área Plantada",
+            "Área Plantada (ha)",
             formatar_inteligente(val_area_p, sufixo=' ha'),
             d_area_p,
             help=f"Soma total de hectares plantados no período. {ano_ref_label}.",
         )
     with col2:
         st.metric(
-            "Área Perdida",
+            "Área Perdida (ha)",
             formatar_inteligente(val_area_perd, sufixo=' ha'),
             d_area_perd,
             delta_color="inverse",
@@ -546,14 +568,14 @@ if len(df_agregado) > 0:
         )
     with col3:
         st.metric(
-            "Produção Total",
+            "Produção (kg)",
             formatar_inteligente(val_prod, sufixo=' kg'),
             d_prod,
             help=f"Soma total de quilogramas produzidos no período. {ano_ref_label}.",
         )
     with col4:
         st.metric(
-            "Rendimento (ponderado)",
+            "Produtividade (kg/ha)",
             formatar_inteligente(val_rend, sufixo=' kg/ha'),
             d_rend,
             help=(
@@ -563,7 +585,7 @@ if len(df_agregado) > 0:
         )
     with col5:
             st.metric(
-                "% de Perda",
+                "Taxa de Perda (%)",
                 formatar_numero(val_perda, sufixo=' %', decimais=2),
                 d_perda,
                 delta_color="inverse",
@@ -585,7 +607,7 @@ if len(df_agregado) > 0:
         ) if tem_dois else None
 
         st.metric(
-            "Perda por Hectare",
+            "Área Perdida por Hectare",
             formatar_numero(val_perd_ha, sufixo=' ha/ha', decimais=4),
             d_perd_ha,
             delta_color="inverse",
@@ -611,7 +633,7 @@ if len(df_agregado) > 0:
         
         with col_ec1:
             st.metric(
-                "Valor Total (R$ 2024)",
+                "Valor Corrigido (R$)",
                 formatar_inteligente(soma_valor_corrigido, prefixo='R$ ', sufixo=' mil'),
                 d_valor_ec,
                 help=f"Soma do valor de produção corrigido pela inflação IPCA (base 2024). {ano_ref_label}.",
@@ -627,7 +649,7 @@ if len(df_agregado) > 0:
             
             with col_ec2:
                 st.metric(
-                    "Valor Médio por Ha (R$ 2024)",
+                    "Valor Corrigido por ha",
                     formatar_inteligente(media_valor_por_ha, prefixo='R$ ', sufixo=' mil/ha'),
                     d_valor_ha,
                     help=f"Valor corrigido dividido pela área plantada, indicador de rentabilidade. {ano_ref_label}.",
@@ -701,17 +723,17 @@ with col2:
     ), secondary_y=False)
     fig2.add_trace(go.Scatter(
         x=df_agregado['ano'], y=df_agregado[COL_PERDA_PCT],
-        name='% Perda', line=dict(color='#e74c3c', width=3), mode='lines+markers',
+        name='Taxa de Perda (%)', line=dict(color='#e74c3c', width=3), mode='lines+markers',
     ), secondary_y=True)
     fig2.update_layout(
-        title='<b>Produção (kg) e Percentual de Perda</b>',
+        title='<b>Produção (kg) e Taxa de Perda (%)</b>',
         hovermode='x unified', height=450, font=dict(color='black'), separators=',.',
     )
     fig2.update_xaxes(title_text="Ano", type='category',
                       tickfont=dict(color='black'), title_font=dict(color='black'))
     fig2.update_yaxes(title_text="Quilogramas (kg)", secondary_y=False,
                       tickfont=dict(color='black'), title_font=dict(color='black'))
-    fig2.update_yaxes(title_text="% Perda", secondary_y=True,
+    fig2.update_yaxes(title_text="Taxa de Perda (%)", secondary_y=True,
                       tickfont=dict(color='black'), title_font=dict(color='black'))
     st.plotly_chart(fig2, width='stretch')
 
@@ -725,8 +747,8 @@ with col1:
         marker=dict(size=12),
     ))
     fig3.update_layout(
-        title='<b>Rendimento Médio Ponderado (Σkg ÷ Σha colhido)</b>',
-        xaxis_title='ano', yaxis_title='kg/ha',
+        title='<b>Produtividade Média Ponderada (Σkg ÷ Σha colhido)</b>',
+        xaxis_title='ano', yaxis_title='Produtividade (kg/ha)',
         height=400, font=dict(color='black'), separators=',.',
     )
     fig3.update_xaxes(type='category', tickfont=dict(color='black'), title_font=dict(color='black'))
@@ -736,7 +758,7 @@ with col1:
 with col2:
     # ── Prioriza valor corrigido (IPCA 2024) se disponível ────────────────
     col_valor_exibir = COL_VALOR_CORRIGIDO if (COL_VALOR_CORRIGIDO in df_agregado.columns) else COL_VALOR
-    titulo_valor = 'Valor da Produção (R$ 2024 - Corrigido)' if col_valor_exibir == COL_VALOR_CORRIGIDO else 'Valor da Produção (R$)'
+    titulo_valor = 'Valor Corrigido (R$)' if col_valor_exibir == COL_VALOR_CORRIGIDO else 'Valor da Produção (R$)'
     
     texto_valor = df_agregado[col_valor_exibir].apply(
         lambda x: f"R$ {formatar_inteligente(x / 1000) if col_valor_exibir == COL_VALOR else formatar_inteligente(x)}"
@@ -775,7 +797,7 @@ cols_correlacao = [
     COL_PRODUCAO,
     COL_REND,
     COL_VALOR,
-    'valor_producao_pct',
+    COL_VALOR_PCT,
     COL_PERDA_PCT,
 ]
 
@@ -788,6 +810,7 @@ cols_validas = [c for c in cols_correlacao if c in df_filtrado.columns]
 
 if len(cols_validas) > 1:
     corr_matrix  = df_filtrado[cols_validas].corr()
+    corr_matrix = corr_matrix.rename(index=LABEL_COLUNAS, columns=LABEL_COLUNAS)
     text_matrix  = corr_matrix.map(lambda x: f"{str(round(x, 2)).replace('.', ',')}")
     fig_corr = px.imshow(
         corr_matrix, text_auto=False, aspect="auto",
@@ -811,7 +834,7 @@ else:
 st.header("🌤️ Variáveis Climáticas Mais Relevantes")
 st.info(
     "📋 **Análise automática:** Identificando as variáveis climáticas com maior "
-    "correlação com rendimento, produção e perdas."
+    "correlação com produtividade, produção e perdas."
 )
 
 col1, col2, col3 = st.columns(3)
@@ -833,7 +856,11 @@ with col2:
     if COL_VALOR_POR_HA in df_filtrado.columns:
         metricas_disponiveis.append(COL_VALOR_POR_HA)        # Adiciona ao final
     
-    metrica_foco = st.selectbox("Foco da análise:", metricas_disponiveis)
+    metrica_foco = st.selectbox(
+        "Foco da análise:",
+        metricas_disponiveis,
+        format_func=label_coluna,
+    )
 with col3:
     ano_clima_analise = st.selectbox(
         "Ano para análise:",
@@ -856,6 +883,7 @@ cache_key_clima = (
 df_corr_foco = calcular_correlacoes_por_ano(
     df_para_correlacao, metrica_foco, cache_key_clima
 )
+metrica_foco_label = label_coluna(metrica_foco)
 
 if len(df_corr_foco) == 0:
     st.warning("⚠️ Não há dados suficientes para calcular correlações com os filtros selecionados.")
@@ -892,7 +920,7 @@ fig_top.add_trace(go.Bar(
     text=texto_corr, textposition='outside',
 ))
 fig_top.update_layout(
-    title=f'<b>Correlação com: {metrica_foco} ({titulo_ano})</b>',
+    title=f'<b>Correlação com: {metrica_foco_label} ({titulo_ano})</b>',
     xaxis_title='Correlação de Pearson', yaxis_title='Variável Climática',
     height=max(400, len(df_corr_foco) * 30), xaxis_range=[-1, 1],
     font=dict(color='black'), separators=',.',
@@ -963,7 +991,7 @@ for idx, row in top3.iterrows():
             ]))
             df_scatter = df_para_correlacao[cols_scatter].dropna()
             titulo_scatter = (
-                f"Dispersão ({metrica_foco.split('(')[0].strip()}) "
+                f"Dispersão ({metrica_foco_label.split('(')[0].strip()}) "
                 f"× {label_atributo(row['Variável Climática'])}"
             )
             try:
@@ -1026,7 +1054,7 @@ for idx, row in top3.iterrows():
             st.metric("Intensidade", intensidade)
             st.metric("Direção", "📈 Positiva" if row['Correlação'] > 0 else "📉 Negativa")
             st.markdown("**Interpretação:**")
-            metrica_curta = metrica_foco.split('(')[0].strip()
+            metrica_curta = metrica_foco_label.split('(')[0].strip()
             atrib_legivel = label_atributo(row['Variável Climática'])
             if row['Correlação'] > 0:
                 st.success(
@@ -1121,7 +1149,7 @@ if vars_heatmap:
         fig_heatmap.update_layout(
             title=(
                 f'<b>Correlação ao longo do Ciclo da Safra: '
-                f'{metrica_foco.split("(")[0].strip()} ({titulo_ano})</b>'
+                f'{metrica_foco_label.split("(")[0].strip()} ({titulo_ano})</b>'
             ),
             xaxis_title='Período (Ano1: Set–Dez | Ano2: Jan–Mai)',
             yaxis_title='Variável Climática',
@@ -1208,7 +1236,7 @@ with col1:
             line=dict(width=2), marker=dict(size=8),
         ))
     fig_p.update_layout(
-        title=f'<b>Top {num_municipios} – Evolução da Produção Total (kg)</b>',
+        title=f'<b>Top {num_municipios} – Evolução da Produção (kg)</b>',
         xaxis_title='ano', yaxis_title='Produção (kg)', height=500,
         hovermode='x unified',
         legend=dict(orientation="v", yanchor="top", y=1, xanchor="left", x=1.02),
@@ -1228,8 +1256,8 @@ with col2:
             line=dict(width=2), marker=dict(size=8),
         ))
     fig_r.update_layout(
-        title=f'<b>Top {num_municipios} – Evolução da Produtividade</b>',
-        xaxis_title='ano', yaxis_title='Rendimento (kg/ha)', height=500,
+        title=f'<b>Top {num_municipios} – Evolução da Produtividade (kg/ha)</b>',
+        xaxis_title='ano', yaxis_title='Produtividade (kg/ha)', height=500,
         hovermode='x unified',
         legend=dict(orientation="v", yanchor="top", y=1, xanchor="left", x=1.02),
         font=dict(color='black'), separators=',.',
@@ -1263,7 +1291,7 @@ with col3:
 with col4:
     # ── Prioriza valor corrigido (IPCA 2024) se disponível ────────────────
     col_valor_top = COL_VALOR_CORRIGIDO if (COL_VALOR_CORRIGIDO in df_filtrado.columns) else COL_VALOR
-    titulo_valor_top = f'<b>Top {num_municipios} – Valor da Produção (R$ 2024 - Corrigido)</b>' if col_valor_top == COL_VALOR_CORRIGIDO else f'<b>Top {num_municipios} – Valor da Produção (R$)</b>'
+    titulo_valor_top = f'<b>Top {num_municipios} – Valor Corrigido (R$)</b>' if col_valor_top == COL_VALOR_CORRIGIDO else f'<b>Top {num_municipios} – Valor da Produção (R$)</b>'
     
     fig_v = go.Figure()
     for municipio in top_valor_municipios:
@@ -1275,7 +1303,7 @@ with col4:
         ))
     fig_v.update_layout(
         title=titulo_valor_top,
-        xaxis_title='ano', yaxis_title='Valor (R$ mil)' if col_valor_top == COL_VALOR_CORRIGIDO else 'Valor (R$)', height=500,
+        xaxis_title='ano', yaxis_title='Valor Corrigido (R$)' if col_valor_top == COL_VALOR_CORRIGIDO else 'Valor da Produção (R$)', height=500,
         hovermode='x unified',
         legend=dict(orientation="v", yanchor="top", y=1, xanchor="left", x=1.02),
         font=dict(color='black'), separators=',.',
