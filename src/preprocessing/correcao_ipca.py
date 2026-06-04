@@ -112,7 +112,7 @@ def aplicar_correcao_ipca(df,
     >>> 
     >>> df = pd.read_csv('data/interim/PAM_SIDRA/PAM_SIDRA.csv')
     >>> df_corrigido = aplicar_correcao_ipca(df)
-    >>> df_corrigido[['Município', 'Ano', 'valor_producao_ipca_mil_reais', 'valor_producao_ipca_mil_reais_ha']].head()
+    >>> df_corrigido[['municipio', 'ano', 'valor_producao_ipca_mil_reais', 'valor_producao_ipca_mil_reais_ha']].head()
     """
     
     # Validar colunas obrigatórias
@@ -134,9 +134,18 @@ def aplicar_correcao_ipca(df,
     # Calcular valor por hectare
     df['valor_producao_ipca_mil_reais_ha'] = df['valor_producao_ipca_mil_reais'] / df[col_area]
     
-    # Substituir infinitos e NaN
-    df['valor_producao_ipca_mil_reais_ha'] = df['valor_producao_ipca_mil_reais_ha'].replace([np.inf, -np.inf], np.nan)
+    # Substituir missing/infinitos das colunas corrigidas por 0
+    cols_corrigidas = [
+        'valor_producao_ipca_mil_reais',
+        'valor_producao_ipca_mil_reais_ha',
+    ]
+    df[cols_corrigidas] = (
+        df[cols_corrigidas]
+        .replace([np.inf, -np.inf], np.nan)
+        .fillna(0)
+    )
     
+
     if verbose:
         print("\n" + "─" * 70)
         print(f"✓ CORREÇÃO IPCA APLICADA (base {ano_base})")
@@ -159,4 +168,4 @@ if __name__ == "__main__":
     # Teste rápido
     df_teste = pd.read_csv('data/interim/PAM_SIDRA/PAM_SIDRA.csv')
     df_corrigido = aplicar_correcao_ipca(df_teste)
-    print(df_corrigido[['Município', 'Ano', 'valor_producao_ipca_mil_reais', 'valor_producao_ipca_mil_reais_ha']].head(10))
+    print(df_corrigido[['municipio', 'ano', 'valor_producao_ipca_mil_reais', 'valor_producao_ipca_mil_reais_ha']].head(10))
