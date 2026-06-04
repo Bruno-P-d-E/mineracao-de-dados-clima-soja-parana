@@ -29,7 +29,6 @@ COL_FATOR_CORRECAO = 'fator_correcao_ipca'          # Fator de deflação IPCA
 COL_AREA_P    = 'area_plantada_ha'
 COL_AREA_C    = 'area_colhida_ha'
 COL_AREA_PERD        = 'area_perdida_ha'
-COL_AREA_PERD_POR_HA = 'area_perdida_por_ha'
 COL_REND      = 'produtividade_kg_ha'
 COL_VALOR_PCT = 'participacao_valor_pct'
 COL_PERDA_PCT = 'taxa_perda_pct'
@@ -162,11 +161,6 @@ def carregar_dados():
         # ── Colunas derivadas ──────────────────────────────────────────────
         df[COL_AREA_PERD] = df[COL_AREA_P] - df[COL_AREA_C]
         df[COL_PERDA_PCT] = np.where(df[COL_AREA_P] > 0,(df[COL_AREA_PERD] / df[COL_AREA_P]) * 100, 0.0)
-        df[COL_AREA_PERD_POR_HA] = np.where(
-            df[COL_AREA_P] > 0,
-            df[COL_AREA_PERD] / df[COL_AREA_P],
-            0.0
-        )
 
         # ── Conversão de unidades + renomeação IMEDIATA ────────────────────
         # Toneladas → kg  (× 1 000)
@@ -406,13 +400,6 @@ df_agregado = (
     .reset_index(drop=True)
 )
 
-# Recalcula perda por hectare sobre os totais anuais agregados
-df_agregado[COL_AREA_PERD_POR_HA] = np.where(
-    df_agregado[COL_AREA_P] > 0,
-    df_agregado[COL_AREA_PERD] / df_agregado[COL_AREA_P],
-    0.0
-)
-
 # Recalcula métricas derivadas sobre os totais anuais
 df_agregado[COL_REND] = (
     df_agregado[COL_PRODUCAO] / df_agregado[COL_AREA_C]
@@ -546,7 +533,7 @@ if len(df_agregado) > 0:
     )
 
     # ── Renderização ──────────────────────────────────────────────────────────
-    col1, col2, col3, col4, col5, col6 = st.columns(6)
+    col1, col2, col3, col4, col5 = st.columns(5)
 
     with col1:
         st.metric(
@@ -591,29 +578,6 @@ if len(df_agregado) > 0:
                     f"Não é média de percentuais anuais. {ano_ref_label}."
                 ),
             )
-    with col6:
-        val_perd_ha = (
-            ultimo_ano[COL_AREA_PERD_POR_HA]
-            if len(anos_selecionados) == 1
-            else (soma_area_perdida / soma_area_plantada if soma_area_plantada > 0 else np.nan)
-        )
-        d_perd_ha = delta_pct_fmt(
-            ultimo_ano[COL_AREA_PERD_POR_HA],
-            primeiro_ano[COL_AREA_PERD_POR_HA],
-            sufixo_abs=' ha/ha'
-        ) if tem_dois else None
-
-        st.metric(
-            "Área Perdida por Hectare",
-            formatar_numero(val_perd_ha, sufixo=' ha/ha', decimais=4),
-            d_perd_ha,
-            delta_color="inverse",
-            help=(
-                "Hectares perdidos por hectare plantado: Σ(área perdida) ÷ Σ(área plantada). "
-                f"Valor entre 0 e 1. {ano_ref_label}."
-            ),
-        )
-    
     # ── Métricas Econômicas Corrigidas (IPCA 2024) ──────────────────────────
     if COL_VALOR_CORRIGIDO in df_agregado.columns:
         st.divider()
@@ -842,7 +806,6 @@ with col2:
         COL_REND,
         COL_PRODUCAO,
         COL_AREA_PERD,
-        COL_AREA_PERD_POR_HA,
         COL_PERDA_PCT,
         COL_VALOR,
     ]
