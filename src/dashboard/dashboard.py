@@ -454,9 +454,7 @@ else:
     descricao_metricas = (
         f"📋 **Área plantada, área perdida e produção** exibem a **soma total** do período {periodo_label}. "
         f"**Produtividade** e **taxa de perda** são calculadas sobre os **totais agregados** (média ponderada pela área). "
-        f"O delta (▲▼) compara **{ano_fim} versus {ano_ini}**. "
-        f"**Fatores IPCA variáveis** (diferentes anos selecionados)"
-
+        f"O delta (▲▼) compara **{ano_fim} versus {ano_ini}**."
         
     )
 
@@ -521,22 +519,29 @@ if len(df_agregado) > 0:
         val_prod          = ultimo_ano[COL_PRODUCAO]
         val_produtividade = ultimo_ano[COL_REND]
         val_perda         = ultimo_ano[COL_PERDA_PCT]
-        val_produção    = ultimo_ano[COL_VALOR]           if COL_VALOR           in ultimo_ano else np.nan
-        d_area_p = d_area_perd = d_prod = d_produtividade = d_perda = None
+        val_produção      = ultimo_ano[COL_VALOR] if COL_VALOR in ultimo_ano.index else np.nan
+        soma_valor_display = val_produção  # ← usa o valor do ano único, não a soma
+        d_area_p = d_area_perd = d_prod = d_produtividade = d_perda = d_produção = None
     else:
         val_area_p        = soma_area_plantada
         val_area_perd     = soma_area_perdida
         val_prod          = soma_producao
         val_produtividade = produtividade_consolidada
         val_perda         = perda_pct_consolidada
-        val_produção    = ultimo_ano[COL_VALOR]           if COL_VALOR           in ultimo_ano else np.nan
+        val_produção      = ultimo_ano[COL_VALOR] if COL_VALOR in ultimo_ano.index else np.nan
+        soma_valor_display = soma_valor  # ← usa a soma do período
 
         d_area_p    = delta_pct_fmt(ultimo_ano[COL_AREA_P],    primeiro_ano[COL_AREA_P],    sufixo_abs=' ha')
         d_area_perd = delta_pct_fmt(ultimo_ano[COL_AREA_PERD], primeiro_ano[COL_AREA_PERD], sufixo_abs=' ha', sempre_pct=True)
         d_prod      = delta_pct_fmt(ultimo_ano[COL_PRODUCAO],  primeiro_ano[COL_PRODUCAO],  sufixo_abs=' kg')
         d_produtividade = delta_pct_fmt(ultimo_ano[COL_REND],  primeiro_ano[COL_REND],      sufixo_abs=' kg/ha')
         d_perda     = delta_pp_fmt(ultimo_ano[COL_PERDA_PCT],  primeiro_ano[COL_PERDA_PCT])
-        d_produção = delta_pct_fmt(ultimo_ano[COL_VALOR], primeiro_ano[COL_VALOR], sufixo_abs=' R$', sempre_pct=True) if COL_VALOR in ultimo_ano else None
+        d_produção  = delta_pct_fmt(
+            ultimo_ano[COL_VALOR] if COL_VALOR in ultimo_ano.index else np.nan,
+            primeiro_ano[COL_VALOR] if COL_VALOR in primeiro_ano.index else np.nan,
+            sufixo_abs=' R$',
+            sempre_pct=True,
+        )
 
     ano_ref_label = (
         f"Δ {int(ultimo_ano['ano'])} vs {int(primeiro_ano['ano'])}"
@@ -572,7 +577,7 @@ if len(df_agregado) > 0:
     with col4:
         st.metric(
             "Valor de Produção (R$)",
-            f"R$ {formatar_inteligente(soma_valor, sufixo='')}",
+            f"R$ {formatar_inteligente(soma_valor_display, sufixo='')}",
             d_produção,
             help=(
                 "Soma total do valor de produção em reais (corrigido ou nominal, dependendo da disponibilidade). "
@@ -682,7 +687,7 @@ with col2:
         )
         fig4_ipca.update_xaxes(type='category', tickfont=dict(color='black'), title_font=dict(color='black'))
         fig4_ipca.update_yaxes(tickfont=dict(color='black'), title_font=dict(color='black'))
-        st.plotly_chart(fig4_ipca, use_container_width=True, key="fig4_valor_ipca")
+        st.plotly_chart(fig4_ipca, width='stretch', key="fig4_valor_ipca")
 
 
 # ==========================================
@@ -700,6 +705,7 @@ cols_correlacao = [
     COL_REND,
     COL_VALOR,
     COL_VALOR_PCT,
+    COL_VALOR_CORRIGIDO,
     COL_VALOR_POR_HA_NOMINAL,
     COL_VALOR_POR_HA
 ]
