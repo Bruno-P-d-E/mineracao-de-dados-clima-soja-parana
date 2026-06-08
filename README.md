@@ -54,17 +54,18 @@ python src/preprocessing/IBGE.py
 python src/preprocessing/PAM_SIDRA.py
 ```
 
-#### Padronizar colunas PAM SIDRA
+#### Padronizar colunas PAM SIDRA (opcional)
 ```bash
 python src/preprocessing/padronizar_colunas.py
 ```
+> Esta etapa tambem e executada automaticamente pelo `merge.py`.
 
 #### Agregar dados climatológicos
 ```bash
 python src/preprocessing/NASA_POWER_agregation.py
 ```
 
-#### Juntar bases de dados, aplicar IPCA e filtro fenológico
+#### Juntar bases de dados, padronizar colunas, aplicar IPCA e filtro fenológico
 ```bash
 python src/preprocessing/merge.py
 ```

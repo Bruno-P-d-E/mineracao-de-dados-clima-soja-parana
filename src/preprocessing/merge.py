@@ -18,6 +18,7 @@ import pandas as pd
 import re
 from pathlib import Path
 from correcao_ipca import aplicar_correcao_ipca
+from padronizar_colunas import padronizar_colunas
 
 
 def deve_manter_coluna_fenologica(coluna):
@@ -67,6 +68,9 @@ print(f"  IBGE        : {ibge.shape[0]:,} linhas  x {ibge.shape[1]} colunas")
 
 # ── Normalização dos códigos IBGE ─────────────────────────────────────────────
 # Garante 7 dígitos para comparação segura
+print("\n[PADRONIZACAO] Normalizando colunas PAM/SIDRA para snake_case...")
+pam = padronizar_colunas(pam)
+
 pam["cod_ibge"]      = pam["cod_ibge"].str.strip().str.zfill(7)
 nasa["codigo_ibge"]  = nasa["codigo_ibge"].str.strip().str.zfill(7)
 ibge["cod_ibge"]     = ibge["cod_ibge"].str.strip().str.zfill(7)
