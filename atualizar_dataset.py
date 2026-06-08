@@ -85,7 +85,7 @@ def main():
     col_valor = 'Valor da produção (Mil Reais)'
     col_area = 'Área plantada ou destinada à colheita (Hectares)'
     col_rendimento = 'Rendimento médio da produção (Quilogramas por Hectare)'
-    col_ano = 'Ano'
+    col_ano = 'ano'
     
     # Aplicar fator de correção consolidado
     df['fator_correcao_ipca'] = df[col_ano].map(FATORES_ACUMULADOS)
