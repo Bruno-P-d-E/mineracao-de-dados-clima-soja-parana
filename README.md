@@ -20,6 +20,7 @@ Pipeline_TCC/
 │   │   ├── NASA_POWER.py      # Extração da API NASA POWER para CSV
 │   │   ├── IBGE.py            # Extração da API IBGE para CSV
 │   │   ├── PAM_SIDRA.py       # Conversão de XLSX para CSV
+│   │   ├── padronizar_colunas.py # Padronização das colunas PAM/SIDRA
 │   │   ├── NASA_POWER_agregation.py
 │   │   └── merge.py           # Fusão de datasets
 │   ├── analise_exploratoria/  # Notebooks de análise exploratória
@@ -53,12 +54,17 @@ python src/preprocessing/IBGE.py
 python src/preprocessing/PAM_SIDRA.py
 ```
 
+#### Padronizar colunas PAM SIDRA
+```bash
+python src/preprocessing/padronizar_colunas.py
+```
+
 #### Agregar dados climatológicos
 ```bash
 python src/preprocessing/NASA_POWER_agregation.py
 ```
 
-#### Juntar bases de dados
+#### Juntar bases de dados, aplicar IPCA e filtro fenológico
 ```bash
 python src/preprocessing/merge.py
 ```

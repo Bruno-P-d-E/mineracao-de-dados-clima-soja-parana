@@ -21,6 +21,9 @@ Mapeamento:
 import pandas as pd
 from pathlib import Path
 
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+PAM_PATH = PROJECT_ROOT / 'data' / 'interim' / 'PAM_SIDRA' / 'PAM_SIDRA.csv'
+
 # Mapeamento de nomes antigos → novos (snake_case)
 RENAME_MAP = {
     'Município': 'municipio',
@@ -47,15 +50,14 @@ if __name__ == "__main__":
     print("="*70)
     
     # Atualizar PAM_SIDRA.csv
-    pam_path = Path('data/interim/PAM_SIDRA/PAM_SIDRA.csv')
-    print(f"\n[1/1] Padronizando {pam_path}...")
-    df_pam = pd.read_csv(pam_path)
+    print(f"\n[1/1] Padronizando {PAM_PATH}...")
+    df_pam = pd.read_csv(PAM_PATH)
     print(f"      Antes: {list(df_pam.columns[:5])}")
     
     df_pam = padronizar_colunas(df_pam)
-    df_pam.to_csv(pam_path, index=False, encoding='utf-8-sig')
+    df_pam.to_csv(PAM_PATH, index=False, encoding='utf-8-sig')
     print(f"      Depois: {list(df_pam.columns[:5])}")
-    print(f"      ✓ Salvo: {pam_path}")
+    print(f"      ✓ Salvo: {PAM_PATH}")
     
     print("\n" + "="*70)
     print("✓ PADRONIZAÇÃO COMPLETA")

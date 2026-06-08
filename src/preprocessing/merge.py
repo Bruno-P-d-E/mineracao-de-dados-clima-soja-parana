@@ -15,9 +15,37 @@ Chaves de join:
 """
 
 import pandas as pd
-import numpy as np
+import re
 from pathlib import Path
 from correcao_ipca import aplicar_correcao_ipca
+
+
+def deve_manter_coluna_fenologica(coluna):
+    """Mantem somente o periodo fenologico da soja nas colunas climaticas."""
+    if coluna == "ano":
+        return True
+    if "dec" not in coluna and "ano" not in coluna:
+        return True
+
+    match = re.search(r"dec(\d+)_ano(\d+)", coluna)
+    if not match:
+        return False
+
+    num_dec = int(match.group(1))
+    num_ano = int(match.group(2))
+
+    if num_ano == 1 and 26 <= num_dec <= 36:
+        return True
+    if num_ano == 2 and 1 <= num_dec <= 15:
+        return True
+
+    return False
+
+
+def aplicar_filtro_fenologico(df):
+    """Filtra o dataset para o ciclo da soja: set-dez do ano 1 e jan-mai do ano 2."""
+    colunas_para_manter = [col for col in df.columns if deve_manter_coluna_fenologica(col)]
+    return df[colunas_para_manter].copy()
 
 # ── Caminhos ────────────────────────────────────────────────────────────────
 PAM_PATH  = Path("data/interim/PAM_SIDRA/PAM_SIDRA.csv")
@@ -105,12 +133,19 @@ final_cols = (
 
 dataset = dataset[final_cols]
 
+print("\n[FILTRO FENOLOGICO] Mantendo ciclo da soja (Ano 1: dec26-36 | Ano 2: dec1-15)...")
+colunas_antes_filtro = dataset.shape[1]
+dataset = aplicar_filtro_fenologico(dataset)
+colunas_removidas = colunas_antes_filtro - dataset.shape[1]
+colunas_climaticas_filtradas = [c for c in dataset.columns if re.search(r"_dec\d+_ano\d+", c)]
+print(f"  Colunas removidas pelo filtro fenologico: {colunas_removidas:,}")
+
 # ── Relatório ─────────────────────────────────────────────────────────────────
 print(f"\n{'='*55}")
 print(f"Dataset final: {dataset.shape[0]:,} linhas x {dataset.shape[1]} colunas")
 print(f"  Municípios únicos : {dataset['cod_ibge'].nunique():,}")
 print(f"  Anos cobertos     : {sorted(dataset['ano'].unique())}")
-print(f"  Colunas climáticas: {len(nasa_cols)}")
+print(f"  Colunas climáticas: {len(colunas_climaticas_filtradas)}")
 print(f"  Valores nulos     : {dataset.isna().sum().sum():,}")
 print(f"{'='*55}")
 
