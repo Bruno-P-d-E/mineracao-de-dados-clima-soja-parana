@@ -19,6 +19,7 @@ except ImportError:
 # ==========================================
 # NOMES CANÔNICOS DAS COLUNAS
 # ==========================================
+COL_PRODUCAO_TON     = 'quantidade_produzida_ton'
 COL_PRODUCAO         = 'producao_kg'
 COL_VALOR            = 'valor_producao_rs'
 COL_VALOR_CORRIGIDO  = 'valor_producao_ipca_mil_reais'
@@ -36,6 +37,7 @@ LABEL_COLUNAS = {
     COL_AREA_P:              'Área Plantada (ha)',
     COL_AREA_C:              'Área Colhida (ha)',
     COL_AREA_PERD:           'Área Perdida (ha)',
+    COL_PRODUCAO_TON:        'Produção (t)',
     COL_PRODUCAO:            'Produção (kg)',
     COL_REND:                'Produtividade (kg/ha)',
     COL_VALOR:               'Valor da Produção (R$)',
@@ -133,7 +135,6 @@ def carregar_dados():
         df = pd.read_parquet('./data/processed/dataset_final.parquet')
         df['cod_ibge'] = df['cod_ibge'].astype(str)
 
-        # Renomeia colunas PAM para manter compatibilidade
         df = df.rename(columns={
             'area_plantada_ha':               COL_AREA_P,
             'area_plantada_pct':              'area_plantada_pct',
@@ -143,7 +144,6 @@ def carregar_dados():
             'mesorregiao':                    'Mesorregião',
         })
 
-        # ── Colunas derivadas ──────────────────────────────────────────────
         df[COL_AREA_PERD] = df[COL_AREA_P] - df[COL_AREA_C]
         df[COL_PERDA_PCT] = np.where(
             df[COL_AREA_P] > 0,
@@ -151,21 +151,13 @@ def carregar_dados():
             0.0
         )
 
-        # ── Conversão de unidades ──────────────────────────────────────────
-        # Toneladas → kg (× 1 000)
-        df[COL_PRODUCAO] = df['quantidade_produzida_ton'] * 1_000
-        df.drop(columns=['quantidade_produzida_ton'], inplace=True)
+        df[COL_PRODUCAO_TON] = pd.to_numeric(df[COL_PRODUCAO_TON], errors='coerce')
+        df[COL_PRODUCAO] = df[COL_PRODUCAO_TON] * 1_000
 
-        # ── Valor corrigido IPCA ───────────────────────────────────────────
-        # FIX: usa nome original do parquet para evitar dupla multiplicação
-        # caso o rename já tenha ocorrido antes da atribuição.
         if 'valor_producao_ipca_mil_reais' in df.columns:
-            # mil R$ → R$
             df[COL_VALOR_CORRIGIDO] = df['valor_producao_ipca_mil_reais'] * 1_000
 
         if 'valor_producao_ipca_mil_reais_ha' in df.columns:
-            # FIX: converte mil R$/ha → R$/ha a partir do nome original,
-            # nunca do nome canônico (que pode já ter sido sobrescrito).
             df[COL_VALOR_POR_HA] = df['valor_producao_ipca_mil_reais_ha'] * 1_000
 
         if 'fator_correcao_ipca' in df.columns:
@@ -173,16 +165,13 @@ def carregar_dados():
         elif 'fator_correcao' in df.columns:
             df[COL_FATOR_CORRECAO] = df['fator_correcao']
 
-        # ── Valor nominal ──────────────────────────────────────────────────
         if 'valor_producao_mil_reais' in df.columns:
             df[COL_VALOR] = df['valor_producao_mil_reais'] * 1_000
-            # Valor nominal por hectare (calculado sobre totais — não média de proporções)
             df[COL_VALOR_POR_HA_NOMINAL] = df[COL_VALOR] / df[COL_AREA_P].replace(0, np.nan)
             df.drop(columns=['valor_producao_mil_reais'], inplace=True)
         else:
             st.info("ℹ️ Dados em valores nominais (sem correção IPCA)")
 
-        # ── Chave numérica para o mapa ─────────────────────────────────────
         df['codigo_ibge'] = (
             df['cod_ibge'].astype(str).str.zfill(7).str[:7].astype(int)
         )
@@ -206,10 +195,6 @@ def carregar_dados():
 
 @st.cache_data
 def carregar_descricoes_atributos():
-    """
-    Carrega o CSV com as descrições dos atributos climáticos.
-    Retorna dict {atributo: descrição} ou vazio se não encontrado.
-    """
     try:
         caminho_atributos = Path(__file__).parent / "Atributos.csv"
         df_desc = pd.read_csv(caminho_atributos)
@@ -228,7 +213,6 @@ def carregar_descricoes_atributos():
 df             = carregar_dados()
 desc_atributos = carregar_descricoes_atributos()
 
-# ── Verificar e Exibir Status de Correção IPCA ────────────────────────────────
 if COL_VALOR_CORRIGIDO in df.columns:
     pass
 elif COL_FATOR_CORRECAO in df.columns:
@@ -249,48 +233,61 @@ def _base_atributo(atributo: str) -> str:
 
 
 def desc_clima(atributo: str) -> str:
-    """
-    Descrição legível de um atributo climático.
-    Aceita tanto 'AIRMASS' quanto 'AIRMASS_dec1_ano1'.
-    """
     base = _base_atributo(atributo)
     return desc_atributos.get(base, base)
 
 
 def label_atributo(atributo: str) -> str:
-    """
-    Formato canônico para exibição ao usuário: 'BASE = Descrição'.
-    Se o atributo não estiver no CSV, exibe apenas o código.
-    """
     base = _base_atributo(atributo)
     desc = desc_atributos.get(base)
     return f"{base} = {desc}" if desc else base
 
 
 def label_clima_grafico(atributo: str, decendio: int, ano_safra: str) -> str:
-    """Label para eixos Plotly."""
     return f"{label_atributo(atributo)}  ·  dec{decendio} {ano_safra}"
 
 
-# Identifica colunas climáticas
 colunas_climaticas   = [c for c in df.columns if re.match(r'.*_dec\d+_ano\d+', c)]
 atributos_climaticos = sorted(set(c.rsplit('_dec', 1)[0] for c in colunas_climaticas))
 
 
 # ==========================================
-# CORRELAÇÃO – com cache_key explícita
+# HELPER: impacto com sinal baseado no
+# quadrante dominante
+# ==========================================
+def calcular_impacto_com_sinal(medias_quadrantes: pd.Series,
+                                amplitude: float) -> float:
+    """
+    Retorna amplitude_quadrantes com sinal determinado pelo quadrante dominante.
+
+    Lógica:
+      - QI  (clima alto  & métrica alta ) → concordância positiva → sinal +
+      - QIII(clima baixo & métrica baixa) → concordância negativa → sinal +
+        (ambos indicam que clima e métrica variam juntos)
+      - QII (clima baixo & métrica alta ) → discordância → sinal -
+      - QIV (clima alto  & métrica baixa) → discordância → sinal -
+
+    Se medias_quadrantes estiver vazia ou amplitude for NaN, retorna NaN.
+    """
+    if medias_quadrantes.empty or pd.isna(amplitude):
+        return np.nan
+
+    quadrante_dominante = medias_quadrantes.idxmax()
+
+    # QI e QIII indicam que o clima "ajuda" a métrica → impacto positivo
+    sinal = +1 if quadrante_dominante in ('QI', 'QIII') else -1
+    return sinal * amplitude
+
+
+# ==========================================
+# CORRELAÇÃO
 # ==========================================
 @st.cache_data
 def calcular_correlacoes_por_ano(_df, metrica, cache_key):
-    """
-    Calcula correlações de Pearson entre variáveis climáticas e uma métrica.
-    FIX: guarda explícita de variância zero para evitar exceções silenciosas.
-    """
     resultados = []
     for col_clima in colunas_climaticas:
         try:
             df_temp = _df[[col_clima, metrica]].dropna()
-            # FIX: verifica n mínimo E variância > 0 em ambas as séries
             if (len(df_temp) > 5
                     and df_temp[col_clima].std() > 0
                     and df_temp[metrica].std() > 0):
@@ -305,10 +302,101 @@ def calcular_correlacoes_por_ano(_df, metrica, cache_key):
                             'Decêndio':           int(dec_match.group(1)),
                             'Ano Safra':          f"ano{ano_match.group(1)}",
                             'Coluna':             col_clima,
+                            'Indicador':          f"dec{dec_match.group(1)} ano{ano_match.group(1)}",
+                            'Label Gráfico':      f"{atributo}_dec{dec_match.group(1)}_ano{ano_match.group(1)}",
                             'P-valor':            p_valor,
                             'Correlação':         corr,
                             'Correlação Abs':     abs(corr)
                         })
+        except Exception:
+            continue
+    return pd.DataFrame(resultados)
+
+
+@st.cache_data
+def calcular_qcr_por_ano(_df, metrica, cache_key):
+    """
+    Calcula o Quadrant Count Ratio (QCR) e o impacto com sinal correto.
+
+    CORRIGIDO: 'Impacto Quadrantes' agora é amplitude com sinal determinado
+    pelo quadrante de maior média:
+      - QI ou QIII dominante → sinal positivo  (clima e métrica concordam)
+      - QII ou QIV dominante → sinal negativo  (clima e métrica discordam)
+
+    Mantido: 'Impacto Clima' = média(clima alto) − média(clima baixo),
+    que mede o efeito direcional bruto do clima sobre a métrica.
+    Ambos são exportados para permitir comparação no gráfico.
+    """
+    resultados = []
+    for col_clima in colunas_climaticas:
+        try:
+            df_temp = _df[[col_clima, metrica]].dropna()
+            if (len(df_temp) > 5
+                    and df_temp[col_clima].std() > 0
+                    and df_temp[metrica].std() > 0):
+                x_corte = df_temp[col_clima].median()
+                y_corte = df_temp[metrica].median()
+
+                q1 = ((df_temp[col_clima] > x_corte) & (df_temp[metrica] > y_corte)).sum()
+                q2 = ((df_temp[col_clima] <= x_corte) & (df_temp[metrica] > y_corte)).sum()
+                q3 = ((df_temp[col_clima] <= x_corte) & (df_temp[metrica] <= y_corte)).sum()
+                q4 = ((df_temp[col_clima] > x_corte) & (df_temp[metrica] <= y_corte)).sum()
+                n  = q1 + q2 + q3 + q4
+                if n == 0:
+                    continue
+
+                qcr = ((q1 + q3) - (q2 + q4)) / n
+
+                # ── Médias por quadrante ──────────────────────────────────
+                quadrantes_serie = pd.Series(np.select(
+                    [
+                        (df_temp[col_clima] > x_corte) & (df_temp[metrica] > y_corte),
+                        (df_temp[col_clima] <= x_corte) & (df_temp[metrica] > y_corte),
+                        (df_temp[col_clima] <= x_corte) & (df_temp[metrica] <= y_corte),
+                        (df_temp[col_clima] > x_corte) & (df_temp[metrica] <= y_corte),
+                    ],
+                    ['QI', 'QII', 'QIII', 'QIV'],
+                    default='Indefinido'
+                ), index=df_temp.index)
+
+                medias_q = df_temp.groupby(quadrantes_serie)[metrica].mean()
+                amplitude = medias_q.max() - medias_q.min() if len(medias_q) > 0 else np.nan
+
+                # CORRIGIDO: impacto com sinal baseado no quadrante dominante
+                impacto_com_sinal = calcular_impacto_com_sinal(medias_q, amplitude)
+
+                # Mantido como campo auxiliar: efeito direcional bruto do clima
+                media_clima_alto  = df_temp.loc[df_temp[col_clima] >  x_corte, metrica].mean()
+                media_clima_baixo = df_temp.loc[df_temp[col_clima] <= x_corte, metrica].mean()
+                impacto_clima     = media_clima_alto - media_clima_baixo
+
+                atributo  = col_clima.rsplit('_dec', 1)[0]
+                dec_match = re.search(r'dec(\d+)', col_clima)
+                ano_match = re.search(r'ano(\d+)', col_clima)
+                if dec_match and ano_match:
+                    resultados.append({
+                        'Variável Climática':  atributo,
+                        'Decêndio':            int(dec_match.group(1)),
+                        'Ano Safra':           f"ano{ano_match.group(1)}",
+                        'Coluna':              col_clima,
+                        'Indicador':           f"dec{dec_match.group(1)} ano{ano_match.group(1)}",
+                        'Label Gráfico':       f"{atributo}_dec{dec_match.group(1)}_ano{ano_match.group(1)}",
+                        'QCR':                 qcr,
+                        'QCR Abs':             abs(qcr),
+                        # CORRIGIDO: amplitude com sinal do quadrante dominante
+                        'Impacto Quadrantes':  impacto_com_sinal,
+                        'Impacto Abs':         abs(impacto_com_sinal) if not pd.isna(impacto_com_sinal) else np.nan,
+                        # Auxiliar: efeito direcional bruto (clima alto vs baixo)
+                        'Impacto Clima':       impacto_clima,
+                        'Impacto Clima Abs':   abs(impacto_clima),
+                        'Média Clima Alto':    media_clima_alto,
+                        'Média Clima Baixo':   media_clima_baixo,
+                        'QI':                  int(q1),
+                        'QII':                 int(q2),
+                        'QIII':                int(q3),
+                        'QIV':                 int(q4),
+                        'N':                   int(n),
+                    })
         except Exception:
             continue
     return pd.DataFrame(resultados)
@@ -356,7 +444,6 @@ else:
             else municipios_disponiveis_filtrados,
     )
 
-# ── Filtro principal ──────────────────────────────────────────────────────────
 df_filtrado = df[
     (df['ano'].isin(anos_selecionados)) &
     (df['municipio'].isin(municipios_selecionados))
@@ -372,10 +459,6 @@ st.sidebar.metric("Variáveis Climáticas", len(colunas_climaticas))
 
 # ==========================================
 # AGREGAÇÃO ANUAL
-# FIX: todas as colunas somáveis são declaradas condicionalmente.
-# FIX: COL_VALOR_POR_HA é recalculado sobre os totais anuais (não média de proporções).
-# FIX: COL_REND recalculado como média ponderada sobre totais.
-# FIX: COL_PERDA_PCT recalculado sobre totais anuais.
 # ==========================================
 agg_dict = {
     COL_AREA_P:    (COL_AREA_P,    'sum'),
@@ -397,7 +480,6 @@ df_agregado = (
     .reset_index(drop=True)
 )
 
-# FIX: derivadas recalculadas sobre os totais anuais (estatisticamente correto)
 df_agregado[COL_REND] = (
     df_agregado[COL_PRODUCAO] / df_agregado[COL_AREA_C].replace(0, np.nan)
 )
@@ -406,7 +488,6 @@ df_agregado[COL_PERDA_PCT] = np.where(
     df_agregado[COL_AREA_PERD] / df_agregado[COL_AREA_P] * 100,
     0.0
 )
-# FIX: R$/ha calculado sobre os totais anuais; não média de proporções por município
 if COL_VALOR_CORRIGIDO in df_agregado.columns:
     df_agregado[COL_VALOR_POR_HA] = (
         df_agregado[COL_VALOR_CORRIGIDO] / df_agregado[COL_AREA_P].replace(0, np.nan)
@@ -416,19 +497,15 @@ elif COL_VALOR in df_agregado.columns:
         df_agregado[COL_VALOR] / df_agregado[COL_AREA_P].replace(0, np.nan)
     )
 
-# ── Cache key derivada dos filtros ativos ─────────────────────────────────────
 cache_key_filtros = (
     f"mun={','.join(sorted(municipios_selecionados))}"
     f"|meso={','.join(sorted(mesorregioes_selecionadas))}"
     f"|anos={','.join(str(a) for a in sorted(anos_selecionados))}"
 )
 
-# ── Correlações iniciais ──────────────────────────────────────────────────────
 with st.spinner("🔍 Analisando correlações climáticas..."):
     df_correlacoes_inicial = calcular_correlacoes_por_ano(
-        df_filtrado,
-        COL_REND,
-        cache_key_filtros,
+        df_filtrado, COL_REND, cache_key_filtros,
     )
 
 
@@ -455,14 +532,12 @@ else:
         f"📋 **Área plantada, área perdida e produção** exibem a **soma total** do período {periodo_label}. "
         f"**Produtividade** e **taxa de perda** são calculadas sobre os **totais agregados** (média ponderada pela área). "
         f"O delta (▲▼) compara **{ano_fim} versus {ano_ini}**."
-        
     )
 
 st.header(titulo_metricas)
 st.info(descricao_metricas)
 
 if len(df_agregado) > 0:
-    # ── Valores consolidados do período ──────────────────────────────────────
     soma_area_plantada = df_agregado[COL_AREA_P].sum()
     soma_area_colhida  = df_agregado[COL_AREA_C].sum()
     soma_area_perdida  = df_agregado[COL_AREA_PERD].sum()
@@ -470,22 +545,18 @@ if len(df_agregado) > 0:
     soma_valor      = df_agregado[COL_VALOR].sum()
     soma_valor_corr = df_agregado[COL_VALOR_CORRIGIDO].sum()
 
-    # FIX: produtividade consolidada = Σprodução / Σárea_colhida (média ponderada)
     produtividade_consolidada = (
         soma_producao / soma_area_colhida if soma_area_colhida > 0 else np.nan
     )
-    # FIX: % de perda consolidada calculada sobre totais (não média de percentuais)
     perda_pct_consolidada = (
         soma_area_perdida / soma_area_plantada * 100 if soma_area_plantada > 0 else np.nan
     )
-    # FIX: R$/ha consolidado = Σvalor / Σárea_plantada (não média de R$/ha por ano)
     valor_por_ha_consolidado = (
         soma_valor_corr / soma_area_plantada if (soma_area_plantada > 0 and not np.isnan(soma_valor_corr))
         else soma_valor / soma_area_plantada if (soma_area_plantada > 0 and not np.isnan(soma_valor))
         else np.nan
     )
 
-    # ── Referências para o delta ──────────────────────────────────────────────
     primeiro_ano = df_agregado.iloc[0]
     ultimo_ano   = df_agregado.iloc[-1]
     tem_dois     = len(df_agregado) > 1
@@ -512,7 +583,6 @@ if len(df_agregado) > 0:
         sinal = '+ ' if d > 0 else ''
         return formatar_numero(d, prefixo=sinal, sufixo=' pp', decimais=2)
 
-    # ── Seleção de valor exibido e delta ─────────────────────────────────────
     if len(anos_selecionados) == 1:
         val_area_p        = ultimo_ano[COL_AREA_P]
         val_area_perd     = ultimo_ano[COL_AREA_PERD]
@@ -520,7 +590,7 @@ if len(df_agregado) > 0:
         val_produtividade = ultimo_ano[COL_REND]
         val_perda         = ultimo_ano[COL_PERDA_PCT]
         val_produção      = ultimo_ano[COL_VALOR] if COL_VALOR in ultimo_ano.index else np.nan
-        soma_valor_display = val_produção  # ← usa o valor do ano único, não a soma
+        soma_valor_display = val_produção
         d_area_p = d_area_perd = d_prod = d_produtividade = d_perda = d_produção = None
     else:
         val_area_p        = soma_area_plantada
@@ -529,7 +599,7 @@ if len(df_agregado) > 0:
         val_produtividade = produtividade_consolidada
         val_perda         = perda_pct_consolidada
         val_produção      = ultimo_ano[COL_VALOR] if COL_VALOR in ultimo_ano.index else np.nan
-        soma_valor_display = soma_valor  # ← usa a soma do período
+        soma_valor_display = soma_valor
 
         d_area_p    = delta_pct_fmt(ultimo_ano[COL_AREA_P],    primeiro_ano[COL_AREA_P],    sufixo_abs=' ha')
         d_area_perd = delta_pct_fmt(ultimo_ano[COL_AREA_PERD], primeiro_ano[COL_AREA_PERD], sufixo_abs=' ha', sempre_pct=True)
@@ -546,10 +616,8 @@ if len(df_agregado) > 0:
     ano_ref_label = (
         f"Δ {int(ultimo_ano['ano'])} vs {int(primeiro_ano['ano'])}"
         if tem_dois else "Ano único"
-                    
     )
 
-    # ── Renderização ──────────────────────────────────────────────────────────
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
@@ -583,6 +651,7 @@ if len(df_agregado) > 0:
                 "Soma total do valor de produção em reais (corrigido ou nominal, dependendo da disponibilidade). "
             ),
         )
+
 # ==========================================
 # GRÁFICOS PRINCIPAIS
 # ==========================================
@@ -697,17 +766,9 @@ st.header("🔗 Matriz de Correlação (Variáveis de Produção)")
 st.info("📊 Correlação de Pearson entre as variáveis de área, produção, produtividade e valor.")
 
 cols_correlacao = [
-    COL_AREA_P,
-    COL_AREA_C,
-    COL_AREA_PERD,
-    COL_PERDA_PCT,
-    COL_PRODUCAO,
-    COL_REND,
-    COL_VALOR,
-    COL_VALOR_PCT,
-    COL_VALOR_CORRIGIDO,
-    COL_VALOR_POR_HA_NOMINAL,
-    COL_VALOR_POR_HA
+    COL_AREA_P, COL_AREA_C, COL_AREA_PERD, COL_PERDA_PCT,
+    COL_PRODUCAO, COL_REND, COL_VALOR, COL_VALOR_PCT,
+    COL_VALOR_CORRIGIDO, COL_VALOR_POR_HA_NOMINAL, COL_VALOR_POR_HA
 ]
 
 cols_validas = [c for c in cols_correlacao if c in df_filtrado.columns]
@@ -741,30 +802,23 @@ st.info(
     "correlação com produtividade, produção e perdas."
 )
 
-col1, col2, col3 = st.columns(3)
+col1, col2, col3, col4 = st.columns(4)
 with col1:
     top_n = st.slider("Número de variáveis mais relevantes:", 5, 20, 10)
 with col2:
     metricas_disponiveis = [
-        COL_REND,
-        COL_PRODUCAO,
-        COL_AREA_PERD,
-        COL_PERDA_PCT,
-        COL_VALOR,
-        COL_VALOR_POR_HA_NOMINAL,
+        COL_REND, COL_PRODUCAO, COL_AREA_PERD, COL_PERDA_PCT,
+        COL_VALOR, COL_VALOR_POR_HA_NOMINAL,
     ]
     if COL_VALOR_CORRIGIDO in df_filtrado.columns and COL_VALOR_CORRIGIDO not in metricas_disponiveis:
         metricas_disponiveis.insert(5, COL_VALOR_CORRIGIDO)
     if COL_VALOR_POR_HA in df_filtrado.columns and COL_VALOR_POR_HA not in metricas_disponiveis:
         metricas_disponiveis.append(COL_VALOR_POR_HA)
 
-    # Filtra apenas colunas que existem no df_filtrado
     metricas_disponiveis = [m for m in metricas_disponiveis if m in df_filtrado.columns]
 
     metrica_foco = st.selectbox(
-        "Foco da análise:",
-        metricas_disponiveis,
-        format_func=label_coluna,
+        "Foco da análise:", metricas_disponiveis, format_func=label_coluna,
     )
 with col3:
     ano_clima_analise = st.selectbox(
@@ -772,22 +826,37 @@ with col3:
         options=["Todos os anos"] + [str(a) for a in sorted(anos_selecionados)],
         index=0,
     )
-
+with col4:
+    producao_minima_ton = st.number_input(
+        "Produção mínima (t):",
+        min_value=0.0, value=0.0, step=100.0, format="%.0f",
+        help="Aplica quantidade_produzida_ton >= valor informado apenas na análise de impacto.",
+    )
+vars_qcr = st.multiselect(
+    "Variáveis climáticas para ranking QCR:",
+    options=atributos_climaticos, default=atributos_climaticos, format_func=desc_clima,
+)
 df_para_correlacao = (
     df_filtrado.copy() if ano_clima_analise == "Todos os anos"
     else df_filtrado[df_filtrado['ano'] == int(ano_clima_analise)].copy()
 )
+
+if producao_minima_ton > 0:
+    df_para_correlacao = df_para_correlacao[
+        df_para_correlacao[COL_PRODUCAO_TON] >= producao_minima_ton
+    ].copy()
+
 titulo_ano = "Todos os Anos" if ano_clima_analise == "Todos os anos" else ano_clima_analise
 
 cache_key_clima = (
     f"{cache_key_filtros}"
     f"|metrica={metrica_foco}"
     f"|ano_analise={ano_clima_analise}"
+    f"|producao_minima_ton={producao_minima_ton}"
 )
 
-df_corr_foco = calcular_correlacoes_por_ano(
-    df_para_correlacao, metrica_foco, cache_key_clima
-)
+df_corr_foco = calcular_correlacoes_por_ano(df_para_correlacao, metrica_foco, cache_key_clima)
+df_qcr_foco  = calcular_qcr_por_ano(df_para_correlacao, metrica_foco, cache_key_clima)
 metrica_foco_label = label_coluna(metrica_foco)
 
 if len(df_corr_foco) == 0:
@@ -795,25 +864,26 @@ if len(df_corr_foco) == 0:
     st.stop()
 
 df_corr_foco = df_corr_foco.nlargest(top_n, 'Correlação Abs')
+if len(df_qcr_foco) > 0:
+    df_qcr_foco = df_qcr_foco[df_qcr_foco['Variável Climática'].isin(vars_qcr)]
+    df_qcr_foco = df_qcr_foco.nlargest(top_n, 'Impacto Abs')
 
-st.subheader(f"🔝 Top {len(df_corr_foco)} Variáveis com Maior Impacto – {titulo_ano}")
+st.subheader(
+    f"🔝 Top {len(df_corr_foco)} Variáveis com Maior Impacto – {titulo_ano}"
+)
 
 texto_corr = df_corr_foco.apply(
     lambda row: formatar_correlacao_pvalor(
-        row['Correlação'],
-        row['P-valor'],
-        decimais_corr=3,
-        decimais_pvalor=2,
-        usar_limite_pvalor=False,
-        notacao_cientifica_pvalor=True,
+        row['Correlação'], row['P-valor'],
+        decimais_corr=3, decimais_pvalor=2,
+        usar_limite_pvalor=False, notacao_cientifica_pvalor=True,
     ),
     axis=1
 )
 fig_top = go.Figure()
 fig_top.add_trace(go.Bar(
     x=df_corr_foco['Correlação'],
-    y=[f"{row['Variável Climática']}_dec{row['Decêndio']}_{row['Ano Safra']}"
-       for _, row in df_corr_foco.iterrows()],
+    y=df_corr_foco['Label Gráfico'],
     orientation='h',
     marker_color=df_corr_foco['Correlação'],
     marker_colorscale='RdYlGn', marker_cmin=-1, marker_cmax=1,
@@ -827,33 +897,85 @@ fig_top.update_layout(
 )
 fig_top.update_xaxes(tickfont=dict(color='black'), title_font=dict(color='black'))
 fig_top.update_yaxes(
-    tickfont=dict(color='black'),
-    title_font=dict(color='black'),
-    autorange='reversed',
+    tickfont=dict(color='black'), title_font=dict(color='black'), autorange='reversed',
 )
 fig_top.add_vline(x=0, line_dash="dash", line_color="#000000")
 st.plotly_chart(fig_top, width='stretch')
 
-# ── legenda ──────────────────────────────────────────────────────────────────
 if desc_atributos:
     atribs_no_top  = sorted(set(df_corr_foco['Variável Climática'].unique()))
     legenda_atribs = "; ".join([label_atributo(a) for a in atribs_no_top])
     st.markdown(
         f"""
         <div style="
-            font-size: 0.92rem;
-            line-height: 1.55;
-            color: #000000;
-            text-align: justify;
-            font-family: 'Times New Roman', serif;
-            padding-top: 0.20rem;
-            padding-bottom: 0.15rem;
+            font-size: 0.92rem; line-height: 1.55; color: #000000;
+            text-align: justify; font-family: 'Times New Roman', serif;
+            padding-top: 0.20rem; padding-bottom: 0.15rem;
         ">
             <b>Em que:</b> {legenda_atribs}
         </div>
         """,
         unsafe_allow_html=True
     )
+
+if len(df_qcr_foco) > 0:
+    st.subheader(f"🔢 Ranking de Impacto por QCR – {titulo_ano}")
+
+    # CORRIGIDO: texto das barras agora exibe 'Impacto Quadrantes' (amplitude com
+    # sinal do quadrante dominante) e 'Impacto Clima' (efeito direcional bruto),
+    # deixando claro o que cada valor representa.
+    texto_qcr = df_qcr_foco.apply(
+        lambda row: (
+            f"Imp.Quad={formatar_numero(row['Impacto Quadrantes'], decimais=2)} | "
+            f"Imp.Clima={formatar_numero(row['Impacto Clima'], decimais=2)} | "
+            f"QCR={str(round(row['QCR'], 3)).replace('.', ',')} | "
+            f"QI={row['QI']} QII={row['QII']} QIII={row['QIII']} QIV={row['QIV']}"
+        ),
+        axis=1,
+    )
+    fig_qcr = go.Figure()
+    fig_qcr.add_trace(go.Bar(
+        # CORRIGIDO: eixo X usa 'Impacto Quadrantes' (amplitude com sinal correto)
+        x=df_qcr_foco['Impacto Quadrantes'],
+        y=df_qcr_foco['Label Gráfico'],
+        orientation='h',
+        marker_color=df_qcr_foco['QCR'],
+        marker_colorscale='RdYlGn', marker_cmin=-1, marker_cmax=1,
+        text=texto_qcr, textposition='outside',
+    ))
+    fig_qcr.update_layout(
+        title=f'<b>Impacto climático por quadrante (amplitude com sinal): {metrica_foco_label} ({titulo_ano})</b>',
+        # CORRIGIDO: título do eixo X atualizado para refletir o cálculo real
+        xaxis_title=(
+            'Impacto = amplitude(max_quadrante − min_quadrante) '
+            '× sinal(quadrante dominante)'
+        ),
+        yaxis_title='Variável Climática',
+        height=max(400, len(df_qcr_foco) * 34),
+        font=dict(color='black'), separators=',.',
+    )
+    fig_qcr.update_xaxes(tickfont=dict(color='black'), title_font=dict(color='black'))
+    fig_qcr.update_yaxes(
+        tickfont=dict(color='black'), title_font=dict(color='black'), autorange='reversed',
+    )
+    fig_qcr.add_vline(x=0, line_dash="dash", line_color="#000000")
+    st.plotly_chart(fig_qcr, width='stretch')
+
+    if desc_atributos:
+        atribs_qcr  = sorted(set(df_qcr_foco['Variável Climática'].unique()))
+        legenda_qcr = "; ".join([label_atributo(a) for a in atribs_qcr])
+        st.markdown(
+            f"""
+            <div style="
+                font-size: 0.92rem; line-height: 1.55; color: #000000;
+                text-align: justify; font-family: 'Times New Roman', serif;
+                padding-top: 0.20rem; padding-bottom: 0.15rem;
+            ">
+                <b>Em que:</b> {legenda_qcr}
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
 # ── Análise detalhada – Top 3 ─────────────────────────────────────────────────
 st.subheader("🔍 Análise Detalhada – Top 3 Variáveis")
@@ -864,55 +986,104 @@ st.info(f"📊 Análise baseada em **{formatar_numero(n_pontos)} registros** ({t
 top3 = df_corr_foco.head(3)
 for idx, row in top3.iterrows():
     corr_fmt = formatar_correlacao_pvalor(
-        row['Correlação'],
-        row['P-valor'],
-        decimais_corr=4,
-        decimais_pvalor=2,
-        usar_limite_pvalor=False,
-        notacao_cientifica_pvalor=True,
+        row['Correlação'], row['P-valor'],
+        decimais_corr=4, decimais_pvalor=2,
+        usar_limite_pvalor=False, notacao_cientifica_pvalor=True,
     )
 
     with st.expander(
         f"**{idx + 1}. {label_atributo(row['Variável Climática'])}"
-        f"  ·  dec{row['Decêndio']} {row['Ano Safra']}  | {corr_fmt}**"
+        f"  ·  {row['Indicador']}  | {corr_fmt}**"
     ):
         col1, col2 = st.columns([2, 1])
         with col1:
+            coluna_x = row['Coluna']
             cols_scatter = list(dict.fromkeys([
-                row['Coluna'], metrica_foco, 'ano', 'municipio', COL_PRODUCAO
+                coluna_x, metrica_foco, 'ano', 'municipio', COL_PRODUCAO
             ]))
             df_scatter = df_para_correlacao[cols_scatter].dropna()
+            x_corte = df_scatter[coluna_x].median()
+            y_corte = df_scatter[metrica_foco].median()
+
+            quadrantes = pd.Series(np.select(
+                [
+                    (df_scatter[coluna_x] > x_corte) & (df_scatter[metrica_foco] > y_corte),
+                    (df_scatter[coluna_x] <= x_corte) & (df_scatter[metrica_foco] > y_corte),
+                    (df_scatter[coluna_x] <= x_corte) & (df_scatter[metrica_foco] <= y_corte),
+                    (df_scatter[coluna_x] > x_corte) & (df_scatter[metrica_foco] <= y_corte),
+                ],
+                ['QI', 'QII', 'QIII', 'QIV'],
+                default='Indefinido'
+            ), index=df_scatter.index)
+
+            medias_quadrantes = df_scatter.groupby(quadrantes)[metrica_foco].mean()
+            contagens_quadrantes = quadrantes.value_counts()
+            n_q1 = int(contagens_quadrantes.get('QI', 0))
+            n_q2 = int(contagens_quadrantes.get('QII', 0))
+            n_q3 = int(contagens_quadrantes.get('QIII', 0))
+            n_q4 = int(contagens_quadrantes.get('QIV', 0))
+            total_q = n_q1 + n_q2 + n_q3 + n_q4
+
+            quadrant_count_ratio = (
+                ((n_q1 + n_q3) - (n_q2 + n_q4)) / total_q if total_q > 0 else np.nan
+            )
+
+            if len(medias_quadrantes) > 0:
+                quadrante_maior = medias_quadrantes.idxmax()
+                quadrante_menor = medias_quadrantes.idxmin()
+                amplitude_quadrantes = medias_quadrantes.max() - medias_quadrantes.min()
+
+                # CORRIGIDO: amplitude com sinal derivado do quadrante dominante
+                impacto_quadrante_com_sinal = calcular_impacto_com_sinal(
+                    medias_quadrantes, amplitude_quadrantes
+                )
+
+                # Mantido: efeito direcional bruto (clima alto vs clima baixo)
+                impacto_clima = (
+                    df_scatter.loc[df_scatter[coluna_x] > x_corte, metrica_foco].mean()
+                    - df_scatter.loc[df_scatter[coluna_x] <= x_corte, metrica_foco].mean()
+                )
+            else:
+                quadrante_maior = quadrante_menor = "-"
+                amplitude_quadrantes          = np.nan
+                impacto_quadrante_com_sinal   = np.nan
+                impacto_clima                 = np.nan
+
             titulo_scatter = (
                 f"Dispersão ({metrica_foco_label.split('(')[0].strip()}) "
-                f"× {label_atributo(row['Variável Climática'])}"
+                f"× {label_atributo(row['Variável Climática'])} ({row['Indicador']})"
             )
             try:
                 fig_scatter = px.scatter(
-                    df_scatter, x=row['Coluna'], y=metrica_foco,
+                    df_scatter, x=coluna_x, y=metrica_foco,
                     color='ano', size=COL_PRODUCAO,
                     hover_data=['municipio'], trendline='ols', title=titulo_scatter,
                 )
             except Exception:
                 fig_scatter = px.scatter(
-                    df_scatter, x=row['Coluna'], y=metrica_foco,
+                    df_scatter, x=coluna_x, y=metrica_foco,
                     color='ano', size=COL_PRODUCAO,
                     hover_data=['municipio'], title=titulo_scatter,
                 )
                 if len(df_scatter) > 1:
                     slope, intercept, *_ = stats.linregress(
-                        df_scatter[row['Coluna']], df_scatter[metrica_foco]
+                        df_scatter[coluna_x], df_scatter[metrica_foco]
                     )
-                    lx = np.array([df_scatter[row['Coluna']].min(),
-                                   df_scatter[row['Coluna']].max()])
+                    lx = np.array([df_scatter[coluna_x].min(), df_scatter[coluna_x].max()])
                     fig_scatter.add_trace(go.Scatter(
                         x=lx, y=slope * lx + intercept,
                         mode='lines', name='Tendência',
                         line=dict(color='red', dash='dash', width=2),
                     ))
-            fig_scatter.update_layout(
-                title=dict(text=titulo_scatter, y=0.98),
-                margin=dict(l=80, t=100)
+            fig_scatter.add_vline(
+                x=x_corte, line_dash="dot", line_color="#2c3e50",
+                annotation_text="mediana clima", annotation_position="top left",
             )
+            fig_scatter.add_hline(
+                y=y_corte, line_dash="dot", line_color="#2c3e50",
+                annotation_text="mediana metrica", annotation_position="bottom right",
+            )
+            fig_scatter.update_layout(title=dict(text=titulo_scatter, y=0.98), margin=dict(l=80, t=100))
             fig_scatter.update_xaxes(tickfont=dict(color='black'), title_font=dict(color='black'))
             fig_scatter.update_yaxes(tickfont=dict(color='black'), title_font=dict(color='black'))
             st.plotly_chart(fig_scatter, width='stretch')
@@ -932,9 +1103,39 @@ for idx, row in top3.iterrows():
             )
             st.metric("Intensidade", intensidade)
             st.metric("Direção", "📈 Positiva" if row['Correlação'] > 0 else "📉 Negativa")
+
+            # CORRIGIDO: exibe amplitude com sinal (quadrante dominante)
+            st.metric(
+                "Impacto por quadrante (com sinal)",
+                formatar_numero(impacto_quadrante_com_sinal, decimais=2),
+                help=(
+                    "Amplitude entre o maior e o menor quadrante, com sinal positivo se "
+                    "QI ou QIII domina (clima e métrica concordam) e negativo se "
+                    "QII ou QIV domina (clima e métrica discordam)."
+                ),
+            )
+            # Mantido: efeito direcional bruto como métrica auxiliar
+            st.metric(
+                "Impacto direcional clima",
+                formatar_numero(impacto_clima, decimais=2),
+                help="Média da métrica com clima acima da mediana menos abaixo da mediana.",
+            )
+            st.metric(
+                "Amplitude quadrantes (sem sinal)",
+                formatar_numero(amplitude_quadrantes, decimais=2),
+                help="Diferença entre a maior e menor média nos quatro quadrantes (sempre positivo).",
+            )
+            st.metric(
+                "Quadrant Count Ratio",
+                formatar_numero(quadrant_count_ratio, decimais=3),
+                help="QCR = ((QI + QIII) - (QII + QIV)) / N. Varia de -1 a 1.",
+            )
+            st.caption(f"Contagens: QI={n_q1}, QII={n_q2}, QIII={n_q3}, QIV={n_q4}")
+            st.caption(f"Maior média: {quadrante_maior}")
+            st.caption(f"Menor média: {quadrante_menor}")
             st.markdown("**Interpretação:**")
-            metrica_curta  = metrica_foco_label.split('(')[0].strip()
-            atrib_legivel  = label_atributo(row['Variável Climática'])
+            metrica_curta = metrica_foco_label.split('(')[0].strip()
+            atrib_legivel = label_atributo(row['Variável Climática'])
             if row['Correlação'] > 0:
                 st.success(
                     f"Aumento de **{atrib_legivel}** "
@@ -972,7 +1173,6 @@ if vars_heatmap:
             if col_name in df_para_correlacao.columns:
                 try:
                     df_temp = df_para_correlacao[[col_name, metrica_foco]].dropna()
-                    # FIX: guarda de variância zero explícita
                     if (len(df_temp) > 5
                             and df_temp[col_name].std() > 0
                             and df_temp[metrica_foco].std() > 0):
@@ -992,7 +1192,6 @@ if vars_heatmap:
             if col_name in df_para_correlacao.columns:
                 try:
                     df_temp = df_para_correlacao[[col_name, metrica_foco]].dropna()
-                    # FIX: guarda de variância zero explícita
                     if (len(df_temp) > 5
                             and df_temp[col_name].std() > 0
                             and df_temp[metrica_foco].std() > 0):
@@ -1044,21 +1243,14 @@ if vars_heatmap:
         fig_heatmap.add_vline(x=10.5, line_dash="dash", line_color="white", line_width=2)
         st.plotly_chart(fig_heatmap, width='stretch')
 
-        # ── Legenda científica compacta ──────────────────────────────────
         variaveis_legenda = sorted(set(_base_atributo(v) for v in vars_heatmap))
-        legenda_txt = "; ".join([
-            f"{v} = {desc_clima(v)}" for v in variaveis_legenda
-        ])
+        legenda_txt = "; ".join([f"{v} = {desc_clima(v)}" for v in variaveis_legenda])
         st.markdown(
             f"""
             <div style="
-                font-size: 0.92rem;
-                line-height: 1.55;
-                color: #000000;
-                text-align: justify;
-                font-family: 'Times New Roman', serif;
-                padding-top: 0.35rem;
-                padding-bottom: 0.15rem;
+                font-size: 0.92rem; line-height: 1.55; color: #000000;
+                text-align: justify; font-family: 'Times New Roman', serif;
+                padding-top: 0.35rem; padding-bottom: 0.15rem;
             ">
                 <b>Em que: </b> {legenda_txt}
             </div>
@@ -1095,7 +1287,6 @@ st.info("📋 Acompanhamento da evolução anual dos principais municípios prod
 
 num_municipios = st.slider("Número de municípios no ranking:", 3, 15, 5)
 
-# FIX: ranking e exibição usam a mesma coluna de valor para evitar top-N inconsistente
 col_valor_top = COL_VALOR_CORRIGIDO if COL_VALOR_CORRIGIDO in df_filtrado.columns else COL_VALOR
 titulo_valor_top = (
     f'<b>Top {num_municipios} – Valor de Produção Corrigido IPCA (R$)</b>'
@@ -1108,11 +1299,10 @@ label_eixo_valor_top = (
     else 'Valor da Produção (R$)'
 )
 
-top_prod_municipios         = df_filtrado.groupby('municipio')[COL_PRODUCAO].mean().nlargest(num_municipios).index
-top_produtividade_municipios= df_filtrado.groupby('municipio')[COL_REND].mean().nlargest(num_municipios).index
-top_area_municipios         = df_filtrado.groupby('municipio')[COL_AREA_P].mean().nlargest(num_municipios).index
-# FIX: ranking pelo mesmo col_valor_top que será exibido no gráfico
-top_valor_municipios        = df_filtrado.groupby('municipio')[col_valor_top].mean().nlargest(num_municipios).index
+top_prod_municipios          = df_filtrado.groupby('municipio')[COL_PRODUCAO].mean().nlargest(num_municipios).index
+top_produtividade_municipios = df_filtrado.groupby('municipio')[COL_REND].mean().nlargest(num_municipios).index
+top_area_municipios          = df_filtrado.groupby('municipio')[COL_AREA_P].mean().nlargest(num_municipios).index
+top_valor_municipios         = df_filtrado.groupby('municipio')[col_valor_top].mean().nlargest(num_municipios).index
 
 col1, col2 = st.columns(2)
 

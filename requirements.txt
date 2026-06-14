@@ -6,3 +6,6 @@ streamlit==1.56.0
 plotly==6.7.0
 scipy==1.15.3
 scikit-learn==1.5.0
+matplotlib>=3.8.0
+geopandas>=1.0.0
+geobr>=0.2.2
