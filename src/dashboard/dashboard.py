@@ -856,7 +856,7 @@ cache_key_clima = (
 )
 
 df_corr_foco = calcular_correlacoes_por_ano(df_para_correlacao, metrica_foco, cache_key_clima)
-df_qcr_foco  = calcular_qcr_por_ano(df_para_correlacao, metrica_foco, cache_key_clima)
+# df_qcr_foco  = calcular_qcr_por_ano(df_para_correlacao, metrica_foco, cache_key_clima)
 metrica_foco_label = label_coluna(metrica_foco)
 
 if len(df_corr_foco) == 0:
@@ -864,9 +864,9 @@ if len(df_corr_foco) == 0:
     st.stop()
 
 df_corr_foco = df_corr_foco.nlargest(top_n, 'Correlação Abs')
-if len(df_qcr_foco) > 0:
-    df_qcr_foco = df_qcr_foco[df_qcr_foco['Variável Climática'].isin(vars_qcr)]
-    df_qcr_foco = df_qcr_foco.nlargest(top_n, 'Impacto Abs')
+# if len(df_qcr_foco) > 0:
+#     df_qcr_foco = df_qcr_foco[df_qcr_foco['Variável Climática'].isin(vars_qcr)]
+#     df_qcr_foco = df_qcr_foco.nlargest(top_n, 'Impacto Abs')
 
 st.subheader(
     f"🔝 Top {len(df_corr_foco)} Variáveis com Maior Impacto – {titulo_ano}"
@@ -918,64 +918,64 @@ if desc_atributos:
         unsafe_allow_html=True
     )
 
-if len(df_qcr_foco) > 0:
-    st.subheader(f"🔢 Ranking de Impacto por QCR – {titulo_ano}")
+# if len(df_qcr_foco) > 0:
+#     st.subheader(f"🔢 Ranking de Impacto por QCR – {titulo_ano}")
 
-    # CORRIGIDO: texto das barras agora exibe 'Impacto Quadrantes' (amplitude com
-    # sinal do quadrante dominante) e 'Impacto Clima' (efeito direcional bruto),
-    # deixando claro o que cada valor representa.
-    texto_qcr = df_qcr_foco.apply(
-        lambda row: (
-            f"Imp.Quad={formatar_numero(row['Impacto Quadrantes'], decimais=2)} | "
-            f"Imp.Clima={formatar_numero(row['Impacto Clima'], decimais=2)} | "
-            f"QCR={str(round(row['QCR'], 3)).replace('.', ',')} | "
-            f"QI={row['QI']} QII={row['QII']} QIII={row['QIII']} QIV={row['QIV']}"
-        ),
-        axis=1,
-    )
-    fig_qcr = go.Figure()
-    fig_qcr.add_trace(go.Bar(
-        # CORRIGIDO: eixo X usa 'Impacto Quadrantes' (amplitude com sinal correto)
-        x=df_qcr_foco['Impacto Quadrantes'],
-        y=df_qcr_foco['Label Gráfico'],
-        orientation='h',
-        marker_color=df_qcr_foco['QCR'],
-        marker_colorscale='RdYlGn', marker_cmin=-1, marker_cmax=1,
-        text=texto_qcr, textposition='outside',
-    ))
-    fig_qcr.update_layout(
-        title=f'<b>Impacto climático por quadrante (amplitude com sinal): {metrica_foco_label} ({titulo_ano})</b>',
-        # CORRIGIDO: título do eixo X atualizado para refletir o cálculo real
-        xaxis_title=(
-            'Impacto = amplitude(max_quadrante − min_quadrante) '
-            '× sinal(quadrante dominante)'
-        ),
-        yaxis_title='Variável Climática',
-        height=max(400, len(df_qcr_foco) * 34),
-        font=dict(color='black'), separators=',.',
-    )
-    fig_qcr.update_xaxes(tickfont=dict(color='black'), title_font=dict(color='black'))
-    fig_qcr.update_yaxes(
-        tickfont=dict(color='black'), title_font=dict(color='black'), autorange='reversed',
-    )
-    fig_qcr.add_vline(x=0, line_dash="dash", line_color="#000000")
-    st.plotly_chart(fig_qcr, width='stretch')
+#     # CORRIGIDO: texto das barras agora exibe 'Impacto Quadrantes' (amplitude com
+#     # sinal do quadrante dominante) e 'Impacto Clima' (efeito direcional bruto),
+#     # deixando claro o que cada valor representa.
+#     texto_qcr = df_qcr_foco.apply(
+#         lambda row: (
+#             f"Imp.Quad={formatar_numero(row['Impacto Quadrantes'], decimais=2)} | "
+#             f"Imp.Clima={formatar_numero(row['Impacto Clima'], decimais=2)} | "
+#             f"QCR={str(round(row['QCR'], 3)).replace('.', ',')} | "
+#             f"QI={row['QI']} QII={row['QII']} QIII={row['QIII']} QIV={row['QIV']}"
+#         ),
+#         axis=1,
+#     )
+#     fig_qcr = go.Figure()
+#     fig_qcr.add_trace(go.Bar(
+#         # CORRIGIDO: eixo X usa 'Impacto Quadrantes' (amplitude com sinal correto)
+#         x=df_qcr_foco['Impacto Quadrantes'],
+#         y=df_qcr_foco['Label Gráfico'],
+#         orientation='h',
+#         marker_color=df_qcr_foco['QCR'],
+#         marker_colorscale='RdYlGn', marker_cmin=-1, marker_cmax=1,
+#         text=texto_qcr, textposition='outside',
+#     ))
+#     fig_qcr.update_layout(
+#         title=f'<b>Impacto climático por quadrante (amplitude com sinal): {metrica_foco_label} ({titulo_ano})</b>',
+#         # CORRIGIDO: título do eixo X atualizado para refletir o cálculo real
+#         xaxis_title=(
+#             'Impacto = amplitude(max_quadrante − min_quadrante) '
+#             '× sinal(quadrante dominante)'
+#         ),
+#         yaxis_title='Variável Climática',
+#         height=max(400, len(df_qcr_foco) * 34),
+#         font=dict(color='black'), separators=',.',
+#     )
+#     fig_qcr.update_xaxes(tickfont=dict(color='black'), title_font=dict(color='black'))
+#     fig_qcr.update_yaxes(
+#         tickfont=dict(color='black'), title_font=dict(color='black'), autorange='reversed',
+#     )
+#     fig_qcr.add_vline(x=0, line_dash="dash", line_color="#000000")
+#     st.plotly_chart(fig_qcr, width='stretch')
 
-    if desc_atributos:
-        atribs_qcr  = sorted(set(df_qcr_foco['Variável Climática'].unique()))
-        legenda_qcr = "; ".join([label_atributo(a) for a in atribs_qcr])
-        st.markdown(
-            f"""
-            <div style="
-                font-size: 0.92rem; line-height: 1.55; color: #000000;
-                text-align: justify; font-family: 'Times New Roman', serif;
-                padding-top: 0.20rem; padding-bottom: 0.15rem;
-            ">
-                <b>Em que:</b> {legenda_qcr}
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+#     if desc_atributos:
+#         atribs_qcr  = sorted(set(df_qcr_foco['Variável Climática'].unique()))
+#         legenda_qcr = "; ".join([label_atributo(a) for a in atribs_qcr])
+#         st.markdown(
+#             f"""
+#             <div style="
+#                 font-size: 0.92rem; line-height: 1.55; color: #000000;
+#                 text-align: justify; font-family: 'Times New Roman', serif;
+#                 padding-top: 0.20rem; padding-bottom: 0.15rem;
+#             ">
+#                 <b>Em que:</b> {legenda_qcr}
+#             </div>
+#             """,
+#             unsafe_allow_html=True
+#         )
 
 # ── Análise detalhada – Top 3 ─────────────────────────────────────────────────
 st.subheader("🔍 Análise Detalhada – Top 3 Variáveis")

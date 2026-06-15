@@ -67,7 +67,6 @@ print(f"  NASA_POWER  : {nasa.shape[0]:,} linhas  x {nasa.shape[1]} colunas")
 print(f"  IBGE        : {ibge.shape[0]:,} linhas  x {ibge.shape[1]} colunas")
 
 # ── Normalização dos códigos IBGE ─────────────────────────────────────────────
-# Garante 7 dígitos para comparação segura
 print("\n[PADRONIZACAO] Normalizando colunas PAM/SIDRA para snake_case...")
 pam = padronizar_colunas(pam)
 
@@ -79,32 +78,30 @@ ibge["cod_ibge"]     = ibge["cod_ibge"].str.strip().str.zfill(7)
 pam["ano"]          = pam["ano"].astype(int)
 nasa["ano_safra"]   = nasa["ano_safra"].astype(int)
 
-# ── Aplicar Correção IPCA (deflaciona valores nominais para base 2024) ────────
+# ── Aplicar Correção IPCA ────────────────────────────────────────────────────
 print("\n[CORREÇÃO ECONÔMICA] Aplicando deflação IPCA (base 2024)...")
-pam = aplicar_correcao_ipca(pam, verbose=False)  # verbose=False para não poluir output
+pam = aplicar_correcao_ipca(pam, verbose=False)
 
-# ── Merge 1: PAM_SIDRA + IBGE (enriquece com lat/lon e mesorregião) ──────────
+# ── Merge 1: PAM_SIDRA + IBGE ────────────────────────────────────────────────
 print("\nMerge 1: PAM_SIDRA ↔ IBGE (cod_ibge)...")
 pam_ibge = pam.merge(
     ibge[["cod_ibge", "cod_meso", "mesorregiao", "latitude", "longitude"]],
     on="cod_ibge",
     how="left",
-    validate="m:1",   # muitos anos por município
+    validate="m:1",
 )
 
 n_sem_geo = pam_ibge["latitude"].isna().sum()
 if n_sem_geo:
     print(f"  ⚠  {n_sem_geo} registros PAM sem correspondência no IBGE")
 
-# ── Merge 2: PAM+IBGE + NASA_POWER (cod_ibge + ano) ──────────────────────────
+# ── Merge 2: PAM+IBGE + NASA_POWER ───────────────────────────────────────────
 print("Merge 2: (PAM+IBGE) ↔ NASA_POWER (cod_ibge + ano_safra)...")
 
-# Renomeia chave nasa para igualar o nome
 nasa_renamed = nasa.rename(columns={"codigo_ibge": "cod_ibge",
                                      "ano_safra":   "ano"})
 
-# Remove colunas redundantes da NASA que já temos no PAM/IBGE
-cols_to_drop_nasa = ["municipio"]   # nome já vem do PAM
+cols_to_drop_nasa = ["municipio"]
 nasa_renamed = nasa_renamed.drop(
     columns=[c for c in cols_to_drop_nasa if c in nasa_renamed.columns]
 )
@@ -113,7 +110,7 @@ dataset = pam_ibge.merge(
     nasa_renamed,
     on=["cod_ibge", "ano"],
     how="left",
-    validate="1:1",   # 1 registro climático por município-ano
+    validate="1:1",
 )
 
 n_sem_clima = dataset.iloc[:, nasa_renamed.shape[1]:].isna().all(axis=1).sum()
@@ -121,13 +118,11 @@ if n_sem_clima:
     print(f"  ⚠  {n_sem_clima} registros sem dados climáticos NASA")
 
 # ── Reordenação de colunas ───────────────────────────────────────────────────
-# Identificadores primeiro, depois geo, depois PAM (targets), depois clima
 id_cols      = ["cod_ibge", "municipio", "ano"]
 geo_cols     = ["cod_meso", "mesorregiao", "latitude", "longitude"]
 pam_targets  = [c for c in pam.columns if c not in id_cols]
 nasa_cols    = [c for c in nasa_renamed.columns if c not in ["cod_ibge", "ano"]]
 
-# Garante que só colunas que existem entram na lista final
 final_cols = (
     [c for c in id_cols    if c in dataset.columns] +
     [c for c in geo_cols   if c in dataset.columns] +
@@ -137,12 +132,33 @@ final_cols = (
 
 dataset = dataset[final_cols]
 
+# ── Filtro Fenológico ─────────────────────────────────────────────────────────
 print("\n[FILTRO FENOLOGICO] Mantendo ciclo da soja (Ano 1: dec26-36 | Ano 2: dec1-15)...")
 colunas_antes_filtro = dataset.shape[1]
 dataset = aplicar_filtro_fenologico(dataset)
 colunas_removidas = colunas_antes_filtro - dataset.shape[1]
 colunas_climaticas_filtradas = [c for c in dataset.columns if re.search(r"_dec\d+_ano\d+", c)]
 print(f"  Colunas removidas pelo filtro fenologico: {colunas_removidas:,}")
+
+# ── Filtro Qualidade: remove municípios com zero em quantidade_produzida_ton ──
+print("\n[FILTRO QUALIDADE] Removendo municípios com pelo menos um ano com quantidade_produzida_ton == 0...")
+
+munic_com_zero = dataset.loc[
+    dataset["quantidade_produzida_ton"].fillna(0) == 0,
+    "cod_ibge"
+].unique()
+
+linhas_antes = dataset.shape[0]
+munic_antes  = dataset["cod_ibge"].nunique()
+
+dataset = dataset[~dataset["cod_ibge"].isin(munic_com_zero)].copy()
+
+linhas_depois = dataset.shape[0]
+munic_depois  = dataset["cod_ibge"].nunique()
+
+print(f"  Municípios removidos : {munic_antes - munic_depois:,}  ({len(munic_com_zero)} com zero/nulo)")
+print(f"  Linhas removidas     : {linhas_antes - linhas_depois:,}")
+print(f"  Municípios restantes : {munic_depois:,}")
 
 # ── Relatório ─────────────────────────────────────────────────────────────────
 print(f"\n{'='*55}")
@@ -153,15 +169,13 @@ print(f"  Colunas climáticas: {len(colunas_climaticas_filtradas)}")
 print(f"  Valores nulos     : {dataset.isna().sum().sum():,}")
 print(f"{'='*55}")
 
-# ── Salvar ───────────────────────────────────────────────────────────────────
+# ── Salvar ────────────────────────────────────────────────────────────────────
 dataset.to_csv(OUT_PATH, index=False, encoding="utf-8")
 print(f"\n✓ Dataset salvo em: {OUT_PATH}")
 
-# ── Salvar também em Parquet (otimizado para o Dashboard) ──────────────────────
 PARQUET_PATH = OUT_PATH.parent / "dataset_final.parquet"
 dataset.to_parquet(PARQUET_PATH, index=False, engine="pyarrow")
 print(f"✓ Dataset salvo em (Parquet): {PARQUET_PATH}")
 
-# ── Amostra ──────────────────────────────────────────────────────────────────
 print("\nPrimeiras colunas (amostra):")
 print(dataset[final_cols[:10]].head(3).to_string())

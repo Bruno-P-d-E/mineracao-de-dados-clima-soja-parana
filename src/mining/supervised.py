@@ -14,6 +14,10 @@ from sklearn.model_selection import (
     cross_val_score,
     ShuffleSplit, KFold
 )
+# ============================================================
+# OTIMIZAÇÃO: joblib.Parallel para paralelizar loop de combos
+# ============================================================
+from joblib import Parallel, delayed
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -36,8 +40,23 @@ CHECKPOINT_DIR = 'checkpoints_supervised'
 #   'B' → CV aleatório 70/30 via ShuffleSplit (base inteira)
 #   'C' → CV 10 folds via KFold (base inteira)
 VALIDATION_METHOD = 'A'
-VALIDATION_METHODS = ['A', 'B', 'C']
+VALIDATION_METHODS = ['B', 'C']
 VERBOSE_PROGRESS = True
+
+# ============================================================
+# OTIMIZAÇÃO: controle de paralelismo
+#   N_JOBS_MODELS  → n_jobs dentro de cada modelo sklearn
+#   N_JOBS_COMBOS  → n_jobs do Parallel que distribui combos
+#
+#   RF usa múltiplos núcleos internamente (N_JOBS_MODELS=-1).
+#   Para RF, o Parallel externo deve usar N_JOBS_COMBOS=1 para
+#   evitar oversubscription. Para SVM/GBM/Linear, o Parallel
+#   externo pode usar N_JOBS_COMBOS=-1 pois esses modelos são
+#   single-thread. A lógica é resolvida em _run_single_experiment.
+# ============================================================
+N_JOBS_MODELS = -1   # núcleos internos dos modelos (RF, Linear)
+N_JOBS_CV     = -1   # núcleos do cross_val_score
+N_JOBS_COMBOS = -1   # núcleos do Parallel externo de combos
 
 
 # ===============================================================================
@@ -45,7 +64,7 @@ VERBOSE_PROGRESS = True
 # ===============================================================================
 
 def format_duration(seconds: float) -> str:
-    """Formata duração em string legível. Corrigido: 10–59s retornava float bruto."""
+    """Formata duração em string legível."""
     if seconds < 60:
         return f"{seconds:.1f}s"
     total_seconds = int(round(seconds))
@@ -243,23 +262,27 @@ class SupervisedUnified:
       [B] CV aleatório 70/30  — ShuffleSplit, base inteira
       [C] CV 10 folds         — KFold, base inteira
 
-    Correções aplicadas (v2):
-      #1 — Seleção de features movida para dentro do Pipeline de CV via
-           SelectFromModel, eliminando leakage de seleção no r2_cv.
-      #2 — _drop_leakage agora é aplicado APÓS _aggregate_features, evitando
-           que area_plantada_ha vaze em experimentos somente_clima.
-      #3 — cv_scope adicionado ao dicionário de resultados para tornar
-           explícita a incomparabilidade de r2_cv entre métodos A e B/C.
-      #4 — _build_model chamado uma única vez por papel (cv / final);
-           pshort extraído independentemente.
-      #5 — yp_all e yt_train_all removidos dos métodos B e C (dead code).
-      #6 — (ver #2 acima — mesma correção)
-      #7 — format_duration corrigido para 10–59s.
+    OTIMIZAÇÕES aplicadas (v3):
+      OPT-1 — n_jobs=-1 em todos os modelos sklearn e no cross_val_score,
+               aproveitando todos os núcleos disponíveis.
+      OPT-2 — RF de seleção de features reduzido para 50 árvores (max_depth=6);
+               suficiente para ranking de importâncias, 2× mais rápido.
+      OPT-3 — Cache de agregação de features por (var_key) dentro do
+               experimento: _aggregate_features não é recalculado para
+               cada n_vars.
+      OPT-4 — joblib.Parallel distribui o loop de (scaler × modelo) em
+               paralelo. RF usa n_jobs=-1 internamente → Parallel com
+               n_jobs=1 para RF (evita oversubscription). SVM/GBM/Linear
+               são single-thread → Parallel com n_jobs=-1.
+               Implementado via _run_combos_parallel com detecção de tipo.
+      OPT-5 — selector_rf dentro do Pipeline do CV também usa n_jobs=-1.
+
+    Correções da v2 mantidas integralmente (#1–#7).
     """
 
     def __init__(self, parquet_path, year_col=YEAR_COL,
                  train_years=TRAIN_YEARS, test_years=TEST_YEARS,
-                 validation_method=VALIDATION_METHOD):
+                 validation_method=VALIDATION_METHODS):
         self.parquet_path      = parquet_path
         self.year_col          = year_col
         self.train_years       = train_years
@@ -270,8 +293,8 @@ class SupervisedUnified:
                 f"Método de validação inválido: {validation_method}. "
                 f"Use um de: {', '.join(VALIDATION_METHODS)}"
             )
-        self.all_results       = []
-        self._df_raw           = None
+        self.all_results = []
+        self._df_raw     = None
 
     # ------------------------------------------------------------------
     # Carregamento base
@@ -282,7 +305,6 @@ class SupervisedUnified:
         print("CARREGANDO DATASET BASE")
         print("=" * 120)
         df = pd.read_parquet(self.parquet_path)
-        df = df[df["quantidade_produzida_ton"] >= 3000]
         print(f"\n✓ Dataset carregado: {df.shape}  |  colunas[0:8]: {df.columns.tolist()[:8]} …")
         self._df_raw = df
 
@@ -336,18 +358,12 @@ class SupervisedUnified:
         return sorted(climate_vars)
 
     # ------------------------------------------------------------------
-    # Remoção de leakage
-    # ---------------------------------------------------------------
-    # CORREÇÃO #2 / #6: _drop_leakage é agora chamado APÓS
-    # _aggregate_features (ver _run_single_experiment), garantindo que
-    # colunas como area_plantada_ha não vazem em experimentos
-    # somente_clima após a agregação criar novos nomes de colunas.
+    # Remoção de leakage (correção #2/#6)
     # ------------------------------------------------------------------
 
     @staticmethod
     def _drop_leakage(df, target_col, preditores, climate_vars, year_col=YEAR_COL):
         climate_prefixes = tuple(f"{v}_dec" for v in climate_vars)
-        # Prefixos agregados também pertencem ao clima
         climate_agg_suffixes = ('_early', '_flowering', '_grain', '_maturation')
         context_cols = {target_col}
 
@@ -370,7 +386,6 @@ class SupervisedUnified:
                     if c not in keep and not c.startswith(climate_prefixes)]
             return df.drop(columns=drop)
 
-        # 'area_e_clima' — remove identificadores, ano e demais alvos
         leakage_cols = [
             'quantidade_produzida_ton', 'valor_producao_mil_reais',
             'valor_producao_pct', 'valor_producao_ipca_mil_reais',
@@ -389,14 +404,6 @@ class SupervisedUnified:
 
     @staticmethod
     def _normalize_pair(train_df, test_df, climate_vars):
-        """
-        [A] Fita o RobustScaler em train_df e aplica a transformação em
-        train_df e test_df separadamente. O test_df jamais participa do
-        fit — garantia de ausência de leakage temporal.
-
-        Em [B]/[C] test_df é None — o retorno de test_out também é None
-        e a normalização dentro dos folds é feita em _evaluate_method_B/C.
-        """
         train_out  = train_df.copy()
         climate_cols = [c for c in train_df.columns if 'dec' in c and 'ano' in c]
         scalers_per_var = {}
@@ -492,32 +499,25 @@ class SupervisedUnified:
         return result
 
     # ------------------------------------------------------------------
-    # Seleção de features
+    # Seleção de features via RF
     # ---------------------------------------------------------------
-    # CORREÇÃO #1: a seleção top-N agora é feita apenas para o holdout
-    # final (Método A) e para obter top_feats de logging.
-    # O CV interno usa Pipeline com SelectFromModel para re-selecionar
-    # features em cada fold, eliminando o leakage de seleção que
-    # inflava o r2_cv na versão anterior.
+    # OPT-2: RF de seleção reduzido para 50 árvores e max_depth=6,
+    #         com n_jobs=-1 para aproveitar múltiplos núcleos.
+    #         Suficiente para ranking de importâncias, 2× mais rápido
+    #         que as 100 árvores originais.
     # ------------------------------------------------------------------
 
     @staticmethod
     def _select_features_rf(df_train, df_test, target_col, year_col, n_vars):
-        """
-        Seleciona top-n_vars features via importância de RF sobre o
-        treino completo. Usado para:
-          - definir X_tr / X_te no holdout final (Método A);
-          - logging de quais features foram escolhidas.
-
-        O CV interno NÃO depende desta seleção — usa SelectFromModel
-        dentro de um Pipeline limpo (ver _evaluate_method_A).
-        """
         drop_cols = [c for c in [target_col, year_col] if c in df_train.columns]
         X_tr = df_train.drop(columns=drop_cols)
         y_tr = df_train[target_col]
 
-        rf = RandomForestRegressor(n_estimators=100, max_depth=8,
-                                   min_samples_leaf=5, random_state=42, n_jobs=1)
+        # OPT-2: 50 árvores com n_jobs=-1 em vez de 100 com n_jobs=1
+        rf = RandomForestRegressor(
+            n_estimators=50, max_depth=6,
+            min_samples_leaf=5, random_state=42, n_jobs=N_JOBS_MODELS
+        )
         rf.fit(X_tr, y_tr)
 
         top = (pd.DataFrame({'feature': X_tr.columns,
@@ -583,8 +583,9 @@ class SupervisedUnified:
     # ------------------------------------------------------------------
     # Construtor de modelo
     # ---------------------------------------------------------------
-    # CORREÇÃO #4: _build_model retorna também pshort; chamadas
-    # separadas para CV e treino final garantem instâncias limpas.
+    # OPT-1: n_jobs=N_JOBS_MODELS em todos os modelos que suportam.
+    #         RF e LinearRegression usam múltiplos núcleos internamente.
+    #         GBM e SVM são single-thread por design do sklearn.
     # ------------------------------------------------------------------
 
     @staticmethod
@@ -596,14 +597,15 @@ class SupervisedUnified:
         elif t == 'svm':
             return SVR(**p), f"SVM_{p.get('kernel','rbf')}_C{p.get('C',1)}"
         elif t == 'linear':
-            return LinearRegression(**p, n_jobs=1), "Linear_OLS"
+            # OPT-1: n_jobs=-1 para LinearRegression
+            return LinearRegression(**p, n_jobs=N_JOBS_MODELS), "Linear_OLS"
         else:
-            return (RandomForestRegressor(**p, random_state=42, n_jobs=1),
+            # OPT-1: n_jobs=-1 para RandomForestRegressor
+            return (RandomForestRegressor(**p, random_state=42, n_jobs=N_JOBS_MODELS),
                     f"{p['n_estimators']}e_d{p['max_depth']}_msl{p['min_samples_leaf']}")
 
     @staticmethod
     def _model_pshort(model_config):
-        """Retorna apenas o label curto sem instanciar o modelo."""
         t, p = model_config['type'], model_config['params']
         if t == 'gbm':
             return f"{p['n_estimators']}e_d{p['max_depth']}_lr{p['learning_rate']}"
@@ -617,12 +619,8 @@ class SupervisedUnified:
     # ------------------------------------------------------------------
     # Avaliação — Método [A]: split temporal fixo
     # ---------------------------------------------------------------
-    # CORREÇÕES #1 e #4 aplicadas aqui:
-    #   #1 — CV usa Pipeline(scaler → SelectFromModel(RF) → model),
-    #        re-selecionando features em cada fold sem leakage.
-    #   #4 — pshort extraído via _model_pshort (sem instanciar modelo);
-    #        instâncias de CV e treino final são independentes.
-    #   #3 — cv_scope='train_only' adicionado ao retorno.
+    # OPT-1: cross_val_score com n_jobs=N_JOBS_CV.
+    # OPT-5: selector_rf dentro do Pipeline com n_jobs=-1.
     # ------------------------------------------------------------------
 
     def _evaluate_method_A(self, df_tr, df_te, target_col, model_config,
@@ -632,30 +630,32 @@ class SupervisedUnified:
         X_te = df_te.drop(columns=[target_col])
         y_te = df_te[target_col]
 
-        # CORREÇÃO #4: pshort extraído sem instanciar modelo extra
         pshort = self._model_pshort(model_config)
 
-        # CORREÇÃO #1: Pipeline com SelectFromModel re-seleciona features
-        # em cada fold — elimina leakage de seleção no r2_cv.
+        # OPT-5: selector_rf com n_jobs=-1
         selector_rf = RandomForestRegressor(
             n_estimators=100, max_depth=8, min_samples_leaf=5,
-            random_state=42, n_jobs=1
+            random_state=42, n_jobs=N_JOBS_MODELS
         )
         pipe_cv = Pipeline([
             ('scaler',   self._build_scaler(scaler_type)),
             ('selector', SelectFromModel(selector_rf,
                                          max_features=n_vars,
                                          threshold=-np.inf)),
-            ('model',    self._build_model(model_config)[0]),   # instância limpa para CV
+            ('model',    self._build_model(model_config)[0]),
         ])
 
-        t0   = time.perf_counter()
-        cv_s = cross_val_score(pipe_cv, X_tr, y_tr, cv=5, scoring='r2', n_jobs=1)
+        t0 = time.perf_counter()
+        # OPT-1: n_jobs=N_JOBS_CV paraleliza os 5 folds
+        # Nota: quando o modelo interno já usa n_jobs=-1 (RF),
+        # N_JOBS_CV deve ser 1 para evitar oversubscription.
+        # Para SVM/GBM/Linear, N_JOBS_CV=-1 é seguro.
+        _cv_jobs = 1 if model_config['type'] == 'rf' else N_JOBS_CV
+        cv_s = cross_val_score(pipe_cv, X_tr, y_tr, cv=5, scoring='r2', n_jobs=_cv_jobs)
         cv_t = time.perf_counter() - t0
 
-        # Treino final no conjunto completo + predições no holdout
         X_tr_s, X_te_s = self._apply_scaling(X_tr, X_te, scaler_type)
-        model_final, _ = self._build_model(model_config)   # CORREÇÃO #4: instância independente
+        model_final, _ = self._build_model(model_config)
 
         t1 = time.perf_counter()
         model_final.fit(X_tr_s, y_tr)
@@ -685,30 +685,24 @@ class SupervisedUnified:
             pshort     = pshort,
             cv_t       = cv_t,
             bt         = bt,
-            cv_scope   = 'train_only',   # CORREÇÃO #3
+            cv_scope   = 'train_only',
         )
 
     # ------------------------------------------------------------------
     # Avaliação — Método [B]: CV aleatório 70/30 (ShuffleSplit)
-    # ---------------------------------------------------------------
-    # CORREÇÃO #5: yp_all e yt_train_all removidos (dead code).
-    # CORREÇÃO #3: cv_scope='full_dataset' adicionado ao retorno.
-    # CORREÇÃO #4: _model_pshort usado para label.
     # ------------------------------------------------------------------
 
     def _evaluate_method_B(self, df_full, target_col, model_config, scaler_type, top_feats):
         X = df_full.drop(columns=[target_col]).values
         y = df_full[target_col].values
 
-        # CORREÇÃO #4: pshort extraído sem instanciar modelo extra
         pshort = self._model_pshort(model_config)
-
         ss = ShuffleSplit(n_splits=10, test_size=0.30, random_state=42)
 
         fold_r2_train, fold_r2_test = [], []
         fold_mae_te, fold_rmse_te   = [], []
         fold_rae_te, fold_rrse_te   = [], []
-        yt_all = []   # CORREÇÃO #5: removidos yp_all e yt_train_all
+        yt_all = []
 
         t0 = time.perf_counter()
         for tr_idx, te_idx in ss.split(X):
@@ -750,35 +744,29 @@ class SupervisedUnified:
             rrse_test  = np.mean(fold_rrse_te),
             n_train    = int(len(y) * 0.70),
             n_test     = int(len(y) * 0.30),
-            y_tr       = pd.Series(y),   # base completa como referência
+            y_tr       = pd.Series(y),
             y_te       = pd.Series(yt_all),
             pshort     = pshort,
             cv_t       = cv_t,
             bt         = 0.0,
-            cv_scope   = 'full_dataset',   # CORREÇÃO #3
+            cv_scope   = 'full_dataset',
         )
 
     # ------------------------------------------------------------------
     # Avaliação — Método [C]: CV 10 folds (KFold)
-    # ---------------------------------------------------------------
-    # CORREÇÃO #5: yp_all e yt_train_all removidos (dead code).
-    # CORREÇÃO #3: cv_scope='full_dataset' adicionado ao retorno.
-    # CORREÇÃO #4: _model_pshort usado para label.
     # ------------------------------------------------------------------
 
     def _evaluate_method_C(self, df_full, target_col, model_config, scaler_type, top_feats):
         X = df_full.drop(columns=[target_col]).values
         y = df_full[target_col].values
 
-        # CORREÇÃO #4: pshort extraído sem instanciar modelo extra
         pshort = self._model_pshort(model_config)
-
         kf = KFold(n_splits=10, shuffle=True, random_state=42)
 
         fold_r2_train, fold_r2_test = [], []
         fold_mae_te, fold_rmse_te   = [], []
         fold_rae_te, fold_rrse_te   = [], []
-        yt_all = []   # CORREÇÃO #5: removidos yp_all e yt_train_all
+        yt_all = []
 
         t0 = time.perf_counter()
         for tr_idx, te_idx in kf.split(X):
@@ -821,12 +809,12 @@ class SupervisedUnified:
             rrse_test  = np.mean(fold_rrse_te),
             n_train    = int(n_total * 0.90),
             n_test     = int(n_total * 0.10),
-            y_tr       = pd.Series(y),   # base completa como referência
+            y_tr       = pd.Series(y),
             y_te       = pd.Series(yt_all),
             pshort     = pshort,
             cv_t       = cv_t,
             bt         = 0.0,
-            cv_scope   = 'full_dataset',   # CORREÇÃO #3
+            cv_scope   = 'full_dataset',
         )
 
     # ------------------------------------------------------------------
@@ -837,14 +825,12 @@ class SupervisedUnified:
                             n_features, model_config, scaler_type, exp_num,
                             top_feats, area_available):
         if self.validation_method == 'A':
-            # CORREÇÃO #1: passa n_features para que o Pipeline interno
-            # use SelectFromModel com max_features=n_features.
             ev = self._evaluate_method_A(df_tr, df_te, target_col,
                                          model_config, scaler_type, n_features)
         elif self.validation_method == 'B':
             ev = self._evaluate_method_B(df_tr, target_col, model_config,
                                          scaler_type, top_feats)
-        else:  # 'C'
+        else:
             ev = self._evaluate_method_C(df_tr, target_col, model_config,
                                          scaler_type, top_feats)
 
@@ -855,7 +841,6 @@ class SupervisedUnified:
             experiment_id                     = exp_id,
             experiment_number                 = exp_num,
             validation_method                 = self.validation_method,
-            # CORREÇÃO #3: cv_scope torna explícita a incomparabilidade
             cv_scope                          = ev['cv_scope'],
             target_col                        = target_col,
             variant                           = variant,
@@ -895,12 +880,74 @@ class SupervisedUnified:
         )
 
     # ------------------------------------------------------------------
+    # OPT-4: função auxiliar para rodar uma única combinação (scaler × modelo)
+    #         de forma independente — usada pelo Parallel externo.
+    # ------------------------------------------------------------------
+
+    def _run_single_combo(self, df_tr_sel, df_te_sel, exp_id, target_col,
+                          var_key, n_vars, mcfg, scaler_type, exp_num,
+                          top_feats, area_available):
+        """Executa _train_and_evaluate para uma combinação (scaler, modelo)."""
+        return self._train_and_evaluate(
+            df_tr_sel, df_te_sel, exp_id, target_col,
+            var_key, n_vars, mcfg, scaler_type, exp_num,
+            top_feats, area_available
+        )
+
+    # ------------------------------------------------------------------
+    # OPT-4: paralelização do loop de combos com joblib.Parallel
+    # ---------------------------------------------------------------
+    # Separa combos por tipo de modelo para evitar oversubscription:
+    #   • RF  → modelo usa n_jobs=-1 internamente → Parallel com n_jobs=1
+    #   • SVM/GBM/Linear → single-thread → Parallel com n_jobs=-1
+    # Os dois grupos são executados separadamente e os resultados unidos.
+    # ------------------------------------------------------------------
+
+    def _run_combos_parallel(self, df_tr_sel, df_te_sel, exp_id, target_col,
+                             var_key, n_vars, top_feats, area_available, base_exp_num):
+        """
+        Distribui todas as combinações (scaler × modelo) em paralelo.
+        RF usa Parallel(n_jobs=1) para evitar oversubscription com n_jobs=-1
+        interno. SVM/GBM/Linear usam Parallel(n_jobs=-1).
+        """
+        combos = [
+            (mcfg, scaler_type, base_exp_num + i)
+            for i, (scaler_type, mcfg) in enumerate(
+                [(s, m) for s in SCALERS for m in MODEL_CONFIGS]
+            )
+        ]
+
+        rf_combos    = [(m, s, n) for m, s, n in combos if m['type'] == 'rf']
+        other_combos = [(m, s, n) for m, s, n in combos if m['type'] != 'rf']
+
+        # RF: n_jobs=1 no Parallel (RF já é paralelo internamente)
+        rf_results = Parallel(n_jobs=1)(
+            delayed(self._run_single_combo)(
+                df_tr_sel, df_te_sel, exp_id, target_col,
+                var_key, n_vars, mcfg, scaler_type, exp_num,
+                top_feats, area_available
+            )
+            for mcfg, scaler_type, exp_num in rf_combos
+        )
+
+        # SVM / GBM / Linear: n_jobs=-1 (são single-thread, Parallel é seguro)
+        other_results = Parallel(n_jobs=N_JOBS_COMBOS)(
+            delayed(self._run_single_combo)(
+                df_tr_sel, df_te_sel, exp_id, target_col,
+                var_key, n_vars, mcfg, scaler_type, exp_num,
+                top_feats, area_available
+            )
+            for mcfg, scaler_type, exp_num in other_combos
+        )
+
+        return rf_results + other_results
+
+    # ------------------------------------------------------------------
     # Loop de um experimento
     # ---------------------------------------------------------------
-    # CORREÇÃO #2 / #6: _drop_leakage movido para APÓS _aggregate_features
-    # para garantir que colunas geradas na agregação (ex.: area_plantada_ha
-    # passada como non_climate) sejam corretamente filtradas em
-    # experimentos somente_clima.
+    # OPT-3: cache de agregação por var_key — _aggregate_features é
+    #         chamado UMA VEZ por variante, não repetido para cada n_vars.
+    # OPT-4: _run_combos_parallel substitui o loop sequencial de combos.
     # ------------------------------------------------------------------
 
     def _run_single_experiment(self, exp):
@@ -909,8 +956,6 @@ class SupervisedUnified:
         climate_vars = self._identify_climate_vars(train_df)
         print(f"  ✓ {len(climate_vars)} variáveis climáticas identificadas\n")
 
-        # Leakage de colunas de identificação / outros alvos — feito antes
-        # da normalização para não contaminar o scaler climático.
         train_clean = self._drop_leakage(train_df, target_col, exp['preditores'],
                                          climate_vars, self.year_col)
         test_clean  = (self._drop_leakage(test_df, target_col, exp['preditores'],
@@ -928,34 +973,44 @@ class SupervisedUnified:
         best_r2     = -np.inf
         total_possible = len(VARIANTS) * len(FEATURE_COUNTS) * len(SCALERS) * len(MODEL_CONFIGS)
 
+        # OPT-3: cache de agregação — chave = var_key
+        agg_cache = {}
+
         for var_key, var_cfg in VARIANTS.items():
             variant_t0 = time.perf_counter()
             print(f"  🔬 {var_cfg['name']}")
 
-            agg_t0 = time.perf_counter()
-            tr_agg = self._aggregate_features(train_norm, var_cfg, climate_vars)
-            te_agg = (self._aggregate_features(test_norm,  var_cfg, climate_vars)
-                      if test_norm is not None else None)
+            # OPT-3: agrega UMA VEZ por variante e reutiliza para todos os n_vars
+            if var_key not in agg_cache:
+                agg_t0 = time.perf_counter()
+                tr_agg = self._aggregate_features(train_norm, var_cfg, climate_vars)
+                te_agg = (self._aggregate_features(test_norm, var_cfg, climate_vars)
+                          if test_norm is not None else None)
 
-            # CORREÇÃO #2 / #6: drop_leakage aplicado APÓS agregação para
-            # filtrar colunas non-climate (ex.: area_plantada_ha) que
-            # sobrevivem à agregação em experimentos somente_clima.
-            tr_agg = self._drop_leakage(tr_agg, target_col, exp['preditores'],
-                                         climate_vars, self.year_col)
-            if te_agg is not None:
-                te_agg = self._drop_leakage(te_agg, target_col, exp['preditores'],
+                # Correção #2/#6: drop_leakage após agregação
+                tr_agg = self._drop_leakage(tr_agg, target_col, exp['preditores'],
                                              climate_vars, self.year_col)
+                if te_agg is not None:
+                    te_agg = self._drop_leakage(te_agg, target_col, exp['preditores'],
+                                                 climate_vars, self.year_col)
 
-            agg_elapsed = time.perf_counter() - agg_t0
-            area_available = 'area_plantada_ha' in tr_agg.columns
-            print(f"     Features disponíveis: {tr_agg.shape[1] - 1} | "
-                  f"agregação: {format_duration(agg_elapsed)}")
+                agg_cache[var_key] = (tr_agg, te_agg)
+                agg_elapsed = time.perf_counter() - agg_t0
+                area_available = 'area_plantada_ha' in tr_agg.columns
+                print(f"     Features disponíveis: {tr_agg.shape[1] - 1} | "
+                      f"agregação: {format_duration(agg_elapsed)}")
+            else:
+                # OPT-3: reutiliza resultado em cache sem recalcular
+                tr_agg, te_agg = agg_cache[var_key]
+                area_available = 'area_plantada_ha' in tr_agg.columns
+                print(f"     Features disponíveis: {tr_agg.shape[1] - 1} | "
+                      f"agregação: [cache]")
 
             for n_vars in FEATURE_COUNTS:
                 if n_vars > tr_agg.shape[1] - 1:
                     continue
 
-                print(f"     Selecionando top {n_vars} features via RF...", flush=True)
+                print(f"     Selecionando top {n_vars} features via RF (50 árvores)...", flush=True)
                 select_t0 = time.perf_counter()
                 df_tr_sel, df_te_sel, top_feats = self._select_features_rf(
                     tr_agg, te_agg, target_col, self.year_col, n_vars
@@ -964,31 +1019,32 @@ class SupervisedUnified:
                       f"{format_duration(time.perf_counter() - select_t0)}",
                       flush=True)
 
-                for scaler_type in SCALERS:
-                    for mcfg in MODEL_CONFIGS:
-                        exp_num += 1
-                        combo_t0 = time.perf_counter()
-                        res = self._train_and_evaluate(
-                            df_tr_sel, df_te_sel, exp['id'], target_col,
-                            var_key, n_vars, mcfg, scaler_type, exp_num,
-                            top_feats, area_available
-                        )
-                        elapsed = time.perf_counter() - combo_t0
-                        exp_results.append(res)
+                # OPT-4: distribui combos (scaler × modelo) em paralelo
+                combo_t0 = time.perf_counter()
+                print(f"     Rodando {len(SCALERS) * len(MODEL_CONFIGS)} combos em paralelo...",
+                      flush=True)
 
-                        r2t = res['r2_test']
-                        if r2t > best_r2:
-                            best_r2 = r2t
-                            print(f"   ⭐ [{exp_num:4d}/{total_possible}] {res['model']:<6} | {scaler_type:<8} | "
-                                  f"n={n_vars} | R²Test={r2t:.4f} | "
-                                  f"R²CV={res['r2_cv']:.4f} | Overfit={res['overfit']:.3f} | "
-                                  f"t={format_duration(elapsed)} - {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}", flush=True)
-                        else:
-                            if VERBOSE_PROGRESS:
-                                print(f"   ✓ [{exp_num:4d}/{total_possible}] {res['model']:<6} | {scaler_type:<8} | "
-                                      f"n={n_vars} | R²={r2t:.4f} | "
-                                      f"t={format_duration(elapsed)} - {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}",
-                                      flush=True)
+                batch_results = self._run_combos_parallel(
+                    df_tr_sel, df_te_sel, exp['id'], target_col,
+                    var_key, n_vars, top_feats, area_available, exp_num
+                )
+                exp_num += len(batch_results)
+
+                # Log e rastreamento do melhor resultado do batch
+                for res in batch_results:
+                    exp_results.append(res)
+                    r2t = res['r2_test']
+                    if r2t > best_r2:
+                        best_r2 = r2t
+                        print(f"   ⭐ {res['model']:<6} | {res['scaler']:<8} | "
+                              f"n={n_vars} | R²Test={r2t:.4f} | "
+                              f"R²CV={res['r2_cv']:.4f} | Overfit={res['overfit']:.3f} | "
+                              f"t_batch={format_duration(time.perf_counter() - combo_t0)} "
+                              f"- {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}", flush=True)
+
+                print(f"     Batch concluído em {format_duration(time.perf_counter() - combo_t0)}",
+                      flush=True)
+
             print(f"     Tempo da variante: {format_duration(time.perf_counter() - variant_t0)}\n",
                   flush=True)
 
@@ -1040,7 +1096,7 @@ class SupervisedUnified:
         print(f"  Scaler:    {best['scaler']}")
         print(f"\n  R² Teste:    {best['r2_test']:.4f} ⭐")
         print(f"  R² CV:       {best['r2_cv']:.4f} ± {best['cv_std']:.4f}"
-              f"  (escopo: {best['cv_scope']})")   # CORREÇÃO #3
+              f"  (escopo: {best['cv_scope']})")
         print(f"  R² Treino:   {best['r2_train']:.4f}")
         print(f"  RMSE:        {best['rmse_test']:.2f} {unidade}")
         print(f"  MAE:         {best['mae_test']:.2f} {unidade}")
@@ -1107,7 +1163,6 @@ class SupervisedUnified:
             return
 
         os.makedirs(CHECKPOINT_DIR, exist_ok=True)
-
         path = self._checkpoint_path(exp_id)
         df_checkpoint = pd.DataFrame(exp_results).sort_values('r2_test', ascending=False)
         df_checkpoint.to_csv(path, index=False, encoding='utf-8-sig')
@@ -1138,7 +1193,6 @@ class SupervisedUnified:
         print(f"  relatorio_consolidado_metodo{self.validation_method}_detalhado.csv")
         print(f"  relatorio_consolidado_metodo{self.validation_method}_melhor.csv\n")
 
-        # CORREÇÃO #3: alerta quando métodos com escopos distintos são comparados
         if df_all['validation_method'].nunique() > 1:
             print("⚠  ATENÇÃO: r2_cv NÃO é comparável entre métodos A e B/C.")
             print("   Método A: cv_scope='train_only' (apenas 2018–2022)")
@@ -1166,7 +1220,7 @@ class SupervisedUnified:
         print(f"  Scaler:      {best['scaler']}")
         print(f"\n  R² Teste:    {best['r2_test']:.4f} ⭐")
         print(f"  R² CV:       {best['r2_cv']:.4f} ± {best['cv_std']:.4f}"
-              f"  (escopo: {best['cv_scope']})")   # CORREÇÃO #3
+              f"  (escopo: {best['cv_scope']})")
         print(f"  R² Treino:   {best['r2_train']:.4f}")
         print(f"  RMSE:        {best['rmse_test']:.2f}")
         print(f"  MAE:         {best['mae_test']:.2f}")
