@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Bruno Proença de Souza
+
 from decimal import Decimal
 
 import numpy as np

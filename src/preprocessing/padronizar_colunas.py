@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+# Copyright (C) 2026 Bruno Proença de Souza
+
 """
 Padronização de Nomes de Colunas para snake_case
 =================================================
