@@ -1114,7 +1114,7 @@ with col4:
 st.markdown("---")
 st.markdown("""
     <div style='text-align: center; color: #683;'>
-        🌱 <b>Dashboard Inteligente – Soja Paraná</b> |
-        Fonte: PAM/SIDRA + NASA POWER | Desenvolvido por: Bruno Proença de Souza
+        🌱 <b>Dashboard – Clima e Soja Paraná</b> |
+        Fonte: NASA POWER + IBGE + PAM/SIDRA  | Desenvolvido por: Bruno Proença de Souza
     </div>
 """, unsafe_allow_html=True)
