@@ -1,4 +1,5 @@
 # Copyright (C) 2026 Bruno Proença de Souza
+
 # Environment variables
 .env
 .env.local
@@ -33,7 +34,7 @@ share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-PIPFILE.lock
+Pipfile.lock
 
 # Virtual environments
 venv/
@@ -41,6 +42,15 @@ env/
 ENV/
 env.bak/
 venv.bak/
+
+# Node.js / pnpm / npm
+node_modules/
+**/node_modules/
+.pnpm-store/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
 # IDE
 .vscode/
@@ -52,18 +62,12 @@ venv.bak/
 
 # Jupyter
 .ipynb_checkpoints/
-*.ipynb_checkpoints
 
-# Test/Temp files and folders (kept locally but not sent to git)
+# Test/Temp files and folders
 *_teste/
 *_teste.*
 *.tmp
 *.log
 
-# Docker
+# Docker local files
 .docker/
-
-# Database
-*.db
-*.sqlite
-*.sqlite3
